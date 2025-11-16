@@ -1,8 +1,15 @@
 package heapfile;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+
 public class HeapFile<T extends IRecord<T>> {
     private String fileName;
     private int clusterSize;
+    private ArrayList<Block<T>> blocks;
+    private LinkedList<Integer> emptyBlocks;
+    private LinkedList<Integer> partiallyEmptyBlocks;
+
 
     public HeapFile(String fileName, int clusterSize) {
         this.fileName = fileName;
