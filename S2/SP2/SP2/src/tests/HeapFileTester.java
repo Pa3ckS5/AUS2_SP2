@@ -5,89 +5,200 @@ import heapfile.HeapFile;
 
 import java.io.FileNotFoundException;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Random;
 
 public class HeapFileTester {
 
     public void testMethods(boolean initialFilling) {
-        Random r = new Random();
-        LinkedList<Integer> linkedList = new LinkedList<>();
+        int repsNum = 100;
+        int methodCallsNum = 1000;
+        int maxValue = 100_000;
+        int initialElementsNum = 10;
 
-        //my structure
+        Random r = new Random();
+        LinkedList<PatientBlockPair> linkedList = new LinkedList<>();
+
+        // Clean up previous test files
+        deleteTestFiles("patients");
+
+        // my structure
         HeapFile<Patient> heapFile = null;
 
         try {
             heapFile = new HeapFile<>("patients", 512, Patient.class);
         } catch (FileNotFoundException e) {
-            java.lang.System.out.println("File not found");
+            System.out.println("File not found");
+            return;
         }
-        if (initialFilling) {generateRandomPatients(300, heapFile);}
 
-        int repsNum = 100;
-        int methodCallsNum = 1000;
-        int maxValue = 100_000;
-        int initialElementsNum = 10_000;
+        if (initialFilling) {
+            generateRandomPatients(initialElementsNum, heapFile, linkedList);
+        }
 
-
-        //random methods calls
+        // random methods calls
         int numEquals = 0;
         int numNotEquals = 0;
+        int patientsCount = initialElementsNum;
 
         for (int i = 0; i < repsNum; i++) {
+            System.out.println("Repetition " + (i + 1) + "/" + repsNum);
 
             for (int j = 0; j < methodCallsNum; j++) {
                 int methodProb = r.nextInt(100);
 
                 if (methodProb < 35) {
-                    //insert
-                    int a = r.nextInt(maxValue);
-                    heapFile.insert(a);
-                    if (!linkedList.contains(a)) {
-                        linkedList.add(a);
-                    }
+                    // insert
+                    Patient p = new Patient("FN" + patientsCount, "LN" + patientsCount,
+                            LocalDate.of(2000, 1, 1).plusDays(patientsCount), "" + patientsCount);
+                    patientsCount++;
 
+                    int blockIndex = heapFile.insert(p);
+                    linkedList.add(new PatientBlockPair(p, blockIndex));
 
                 } else if (methodProb >= 35 && methodProb < 66) {
-                    //remove
-                    int linkedListSize = linkedList.size();
-                    if (linkedListSize > 0) {
-                        int index = r.nextInt(linkedListSize);
-                        int a = linkedList.get(index);
-                        heapFile.delete(a);
-                        linkedList.remove(index);
-                    }
+                    // remove - only if there are elements to remove
+                    if (!linkedList.isEmpty()) {
+                        int removeIndex = r.nextInt(linkedList.size());
+                        PatientBlockPair pairToRemove = linkedList.get(removeIndex);
 
-
-                } else {
-                    // find
-                    int linkedListSize = linkedList.size();
-                    if (linkedListSize > 0) {
-                        int index = r.nextInt(linkedListSize);
-                        Integer valueToFind = linkedList.get(index);
-                        Integer found = tree.find(valueToFind);
-                        if (found == null) {
-                            System.out.println("Error: find - value " + valueToFind + " not found in tree");
-                            return;
+                        boolean removedFromHeap = heapFile.delete(pairToRemove.getBlock(), pairToRemove.getPatient());
+                        if (removedFromHeap) {
+                            linkedList.remove(removeIndex);
+                        } else {
+                            boolean removedFromHeap2 = heapFile.delete(pairToRemove.getBlock(), pairToRemove.getPatient());
+                            System.out.println("WARNING: Failed to remove patient from heap file: " + pairToRemove.getPatient());
                         }
                     }
+
+                } else {
+                    // find - verify random patient exists using public get method
+                    if (!linkedList.isEmpty()) {
+                        int findIndex = r.nextInt(linkedList.size());
+                        PatientBlockPair pairToFind = linkedList.get(findIndex);
+
+                        // Try to find the patient by checking records in the block
+                        boolean found = false;
+                        int recordsPerBlock = 512 / (new Patient().getSize()); // Calculate based on block size
+
+                        Patient foundPatient = heapFile.get(pairToFind.getBlock(), pairToFind.getPatient());
+                        if (foundPatient != null && foundPatient.isEqualTo(pairToFind.getPatient())) {
+                            found = true;
+                            break;
+                        }
+
+
+                        if (!found) {
+                            System.out.println("WARNING: Patient not found in block " + pairToFind.getBlock() + ": " + pairToFind.getPatient());
+                        }
+                    }
+                }
+            }
+
+            // After every method calls batch, verify all records
+            boolean equals = verifyAllRecords(heapFile, linkedList);
+
+            if (equals) {
+                numEquals++;
+                System.out.println("✓ Verification " + (i + 1) + " PASSED");
+            } else {
+                numNotEquals++;
+                System.out.println("✗ Verification " + (i + 1) + " FAILED");
+            }
+        }
+
+        // Final verification
+        System.out.println("\n=== FINAL VERIFICATION ===");
+        boolean finalEquals = verifyAllRecords(heapFile, linkedList);
+        if (finalEquals) {
+            System.out.println("✓ Final verification PASSED");
+        } else {
+            System.out.println("✗ Final verification FAILED");
+        }
+
+        // Print heap file structure for debugging
+        heapFile.printAllBlocks();
+
+        heapFile.close();
+
+        System.out.println(String.format("\nSummary: %d/%d passed", numEquals, numEquals + numNotEquals));
+
+        // Clean up test files
+        deleteTestFiles("patients");
+    }
+
+    private boolean verifyAllRecords(HeapFile<Patient> heapFile, LinkedList<PatientBlockPair> linkedList) {
+        System.out.println("Verifying " + linkedList.size() + " records...");
+
+        // Check that every patient in linkedList exists in heapFile
+        for (PatientBlockPair pair : linkedList) {
+            boolean found = false;
+
+            Patient foundPatient = heapFile.get(pair.getBlock(), pair.patient);
+            if (foundPatient != null && foundPatient.isEqualTo(pair.getPatient())) {
+                found = true;
+                break;
+            }
+
+            if (!found) {
+                System.out.println("ERROR: Patient not found in block " + pair.getBlock() + ": " + pair.getPatient());
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void generateRandomPatients(int count, HeapFile<Patient> heapFile, LinkedList<PatientBlockPair> linkedList) {
+        for (int i = 0; i < count; i++) {
+            Patient p = new Patient("FN" + i, "LN" + i,
+                    LocalDate.of(2000, 1, 1).plusDays(i), "" + i);
+            int blockIndex = heapFile.insert(p);
+            linkedList.add(new PatientBlockPair(p, blockIndex));
+        }
+        System.out.println("Generated " + count + " initial patients");
+    }
+
+    private void deleteTestFiles(String baseName) {
+        String[] extensions = {".dat", ".hdr"};
+        for (String ext : extensions) {
+            java.io.File file = new java.io.File(baseName + ext);
+            if (file.exists()) {
+                if (file.delete()) {
+                    System.out.println("Deleted old test file: " + file.getName());
+                } else {
+                    System.out.println("Failed to delete old test file: " + file.getName());
                 }
             }
         }
     }
 
-    private void generateRandomPatients(int count, HeapFile<Patient> heapFile) {
-        for (int i = 0; i < count; i++) {
-            heapFile.insert(new Patient("FN" + i, "LN" + i,
-                    LocalDate.of(2000, 1, 1).plusDays(i), "" + i));
-            i++;
+    public class PatientBlockPair {
+        private int block;
+        private Patient patient;
+
+        public PatientBlockPair(Patient patient, int block) {
+            this.patient = patient;
+            this.block = block;
+        }
+
+        public int getBlock() {
+            return block;
+        }
+
+        public Patient getPatient() {
+            return patient;
+        }
+
+        @Override
+        public String toString() {
+            return "Block " + block + ": " + patient;
         }
     }
 
     public static void main(String[] args) {
         HeapFileTester tester = new HeapFileTester();
-        tester.testMethods(false);
+        System.out.println("=== STARTING HEAP FILE TEST ===");
+        tester.testMethods(true);
     }
 }

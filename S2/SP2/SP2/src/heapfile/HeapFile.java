@@ -5,20 +5,20 @@ import java.util.LinkedList;
 
 public class HeapFile<T extends IRecord<T>> {
     private String fileName;
+    private String headerFileName;
+    private RandomAccessFile file;
+
+    private Class<T> recordClass;
+    private int recordSize;
+    private int recordsPerBlock;
+
     private int blockSize;
     private int blockCount;
-
     private Block<T> currentBlock;
     private int currentBlockIndex;
 
     private LinkedList<Integer> emptyBlocks;
     private LinkedList<Integer> partiallyEmptyBlocks;
-
-    private Class<T> recordClass;
-    private int recordSize;
-    private int recordsPerBlock;
-    private String headerFileName;
-    private RandomAccessFile file;
 
 
     public HeapFile(String fileName, int blockSize, Class<T> recordClass) throws FileNotFoundException {
@@ -98,34 +98,43 @@ public class HeapFile<T extends IRecord<T>> {
     }
 
     public T get(int blockIndex, int recordIndex) {
-        Block<T> block = get(blockIndex);
-        if (block != null) {
-            return block.getRecord(recordIndex);
+        get(blockIndex);
+        if (currentBlock != null) {
+            return currentBlock.getRecord(recordIndex);
         }
         return null;
     }
 
+    public T get(int blockIndex, T record) {
+        get(blockIndex);
+        if (currentBlock != null) {
+            return currentBlock.getRecord(record);
+        }
+        return null;
+    }
+
+
     protected Block<T> get(int blockIndex) {
-        saveCurrentAndLoadBlock(blockIndex);
+        if (currentBlockIndex != blockIndex) {
+            saveCurrentAndLoadBlock(blockIndex);
+        }
         return currentBlock;
     }
 
-    public boolean delete(int blockIndex, T data) {
-        // najdenie, nacitanie bloku a zaznamu
-        //if
-        saveCurrentAndLoadBlock(blockIndex);
+    public boolean delete(int blockIndex, T record) {
+        if (currentBlockIndex != blockIndex) {
+            saveCurrentAndLoadBlock(blockIndex);
+        }
         if (currentBlock == null) {
             return false;
         }
 
         boolean wasFull = currentBlock.isFull();
 
-        // vymazanie dat
-        if (!currentBlock.removeRecord(data)) {
+        if (!currentBlock.removeRecord(record)) {
             return false;
         }
 
-        // aktualizacia partiallyEmptyBlocks
         if (wasFull) {
             if (currentBlock.isEmpty()) {
                 emptyBlocks.add(blockIndex);
@@ -136,7 +145,6 @@ public class HeapFile<T extends IRecord<T>> {
             partiallyEmptyBlocks.remove(Integer.valueOf(blockIndex));
         }
 
-        // kontrola blokov - ak je na konci suboru prazdny blok, vymazavam prazdne bloky od konca, pokym nebude posledny blok neprazdny
         truncateEmptyBlocksAtEnd();
 
         return true;

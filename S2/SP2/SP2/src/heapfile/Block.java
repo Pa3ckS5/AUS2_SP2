@@ -43,12 +43,14 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
 
     public boolean removeRecord(T record) {
         if (!isEmpty()) {
-            for (int i = 0; i < validCount; i++) {
-                T current = records.get(i);
-                if (current != null && current.isEqualTo(record)) {
-                    validRecords.clear(i);
-                    validCount--;
-                    return true;
+            for (int i = 0; i < capacity; i++) {
+                if (validRecords.get(i)) {
+                    T current = records.get(i);
+                    if (current != null && current.isEqualTo(record)) {
+                        validRecords.clear(i);
+                        validCount--;
+                        return true;
+                    }
                 }
             }
         }
@@ -56,7 +58,7 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
     }
 
     public T getRecord(int index) {
-        if (index < 0 || index >= validCount) {
+        if (index < 0 || index >= capacity && !validRecords.get(index)) {
             return null;
         }
         return records.get(index);
@@ -65,7 +67,7 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
     public T getRecord(T  record) {
         for (int i = 0; i < capacity; i++) {
             T current = records.get(i);
-            if (validRecords.get(i) && current != null && current.equals(record)) {
+            if (validRecords.get(i) && current != null && current.isEqualTo(record)) {
                 return current;
             }
         }

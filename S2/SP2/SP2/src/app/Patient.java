@@ -116,7 +116,7 @@ public class Patient implements IRecord<Patient> {
 
     @Override
     public boolean isEqualTo(Patient other) {
-        return this.patientId.trim().equals(other.patientId.trim());
+        return this.patientId.equals(other.patientId);
     }
 
     @Override
