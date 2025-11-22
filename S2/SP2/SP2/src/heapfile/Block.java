@@ -103,17 +103,15 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         DataOutputStream hlpOutStream = new DataOutputStream(hlpByteArrayOutputStream);
 
         try {
-            // Zápis validCount
+            // validCount
             hlpOutStream.writeInt(validCount);
 
-            // Zápis bitmapy validRecords
+            // bitmap
             byte[] bitmapBytes = validRecords.toByteArray();
-            // Zápis dĺžky bitmapy
             hlpOutStream.writeInt(bitmapBytes.length);
-            // Zápis bitmapy
             hlpOutStream.write(bitmapBytes);
 
-            // Zápis záznamov
+            // records
             for (T record : records) {
                 hlpOutStream.write(record.getBytes());
             }
@@ -133,17 +131,17 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
             T sampleRecord = recordClass.newInstance().createClass();
             int recordSize = sampleRecord.getSize();
 
-            // Načítanie validCount
+            // validCount
             this.validCount = hlpInStream.readInt();
 
-            // Načítanie bitmapy
+            // bitmap
             int bitmapLength = hlpInStream.readInt();
             byte[] bitmapBytes = new byte[bitmapLength];
             hlpInStream.readFully(bitmapBytes);
             validRecords.clear();
             validRecords.or(BitSet.valueOf(bitmapBytes));
 
-            // Načítanie všetkých záznamov
+            // records
             for (int i = 0; i < capacity; i++) {
                 byte[] recordBytes = new byte[recordSize];
                 int bytesRead = hlpInStream.read(recordBytes);

@@ -18,8 +18,6 @@ public class HeapFileTester {
 
         Random r = new Random(0);
         LinkedList<PatientBlockPair> linkedList = new LinkedList<>();
-
-        // Clean up previous test files
         deleteTestFiles("patients");
 
         // my structure
@@ -32,7 +30,6 @@ public class HeapFileTester {
             return;
         }
 
-        // random methods calls
         int numEquals = 0;
         int numNotEquals = 0;
         int patientsCount = 0;
@@ -61,26 +58,25 @@ public class HeapFileTester {
                     linkedList.add(new PatientBlockPair(p, blockIndex));
 
                 } else if (methodProb >= 35 && methodProb < 66) {
-                    // remove - only if there are elements to remove
+                    // remove
                     if (!linkedList.isEmpty()) {
                         int removeIndex = r.nextInt(linkedList.size());
                         PatientBlockPair pairToRemove = linkedList.get(removeIndex);
 
                         boolean removedFromHeap = heapFile.delete(pairToRemove.getBlock(), pairToRemove.getPatient());
-                        if (removedFromHeap) {
-                            linkedList.remove(removeIndex);
-                        } else {
+                        linkedList.remove(removeIndex);
+
+                        if (!removedFromHeap) {
                             System.out.println("WARNING: Failed to remove patient from heap file: " + pairToRemove.getPatient());
                         }
                     }
 
                 } else {
-                    // find - verify random patient exists using public get method
+                    // find
                     if (!linkedList.isEmpty()) {
                         int findIndex = r.nextInt(linkedList.size());
                         PatientBlockPair pairToFind = linkedList.get(findIndex);
 
-                        // Try to find the patient by checking records in the block
                         boolean found = false;
                         int recordsPerBlock = 512 / (new Patient().getSize()); // Calculate based on block size
 
@@ -96,7 +92,6 @@ public class HeapFileTester {
                 }
             }
 
-            // After every method calls batch, verify all records
             boolean equals = verifyAllRecords(heapFile, linkedList);
 
             if (equals) {
@@ -117,14 +112,12 @@ public class HeapFileTester {
             System.out.println("✗ Final verification FAILED");
         }
 
-        // Print heap file structure for debugging
         heapFile.printAllBlocks();
 
         heapFile.close();
 
         System.out.println(String.format("\nSummary: %d/%d passed", numEquals, numEquals + numNotEquals));
 
-        // Clean up test files
         deleteTestFiles("patients");
     }
 
