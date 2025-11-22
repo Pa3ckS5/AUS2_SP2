@@ -95,11 +95,16 @@ public class Patient implements IRecord<Patient> {
             for (int i = 0; i < BIRTH_DATE_LENGTH; i++) {
                 dateStr += hlpInStream.readChar();
             }
-            dateStr = dateStr.trim();  // Odstráni medzery
-            if (!dateStr.isEmpty()) {
-                this.birthDate = LocalDate.parse(dateStr, DATE_FORMATTER);
-            } else {
-                this.birthDate = LocalDate.of(2000, 1, 1);  // Predvolená hodnota
+            dateStr = dateStr.trim();
+
+            try {
+                if (!dateStr.isEmpty() && dateStr.length() >= 10) {
+                    this.birthDate = LocalDate.parse(dateStr, DATE_FORMATTER);
+                } else {
+                    this.birthDate = LocalDate.of(2000, 1, 1);
+                }
+            } catch (Exception e) {
+                this.birthDate = LocalDate.of(2000, 1, 1);
             }
 
             this.patientId = "";

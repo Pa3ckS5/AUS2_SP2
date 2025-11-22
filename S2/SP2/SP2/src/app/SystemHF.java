@@ -5,11 +5,11 @@ import heapfile.HeapFile;
 import java.io.FileNotFoundException;
 import java.time.LocalDate;
 
-public class System {
+public class SystemHF {
     private HeapFile<Patient> heapFile;
     private int patientsCount;
 
-    public System(boolean initialFill) {
+    public SystemHF(boolean initialFill) {
         patientsCount = 0;
         HeapFile<Patient> heapFile = null;
         try {
@@ -28,5 +28,24 @@ public class System {
         }
     }
 
+    public void insertPatient(Patient patient) {
+        heapFile.insert(patient);
+    }
+
+    public void removePatient(Patient patient, int blockIndex) {
+        heapFile.delete(blockIndex, patient);
+    }
+
+    public String getBlocksForPrint() {
+        return heapFile.toString();
+    }
+
+    public int getPatientsCount() {
+        return patientsCount;
+    }
+
+    public void close() {
+        heapFile.close();
+    }
 
 }

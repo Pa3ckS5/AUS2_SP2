@@ -58,7 +58,7 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
     }
 
     public T getRecord(int index) {
-        if (index < 0 || index >= capacity && !validRecords.get(index)) {
+        if (index < 0 || index >= capacity || !validRecords.get(index)) {
             return null;
         }
         return records.get(index);

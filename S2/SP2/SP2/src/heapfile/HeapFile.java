@@ -81,10 +81,13 @@ public class HeapFile<T extends IRecord<T>> {
         }
 
         // 4. Vytvor nový blok
+        if (currentBlock != null) {
+            saveBlockToFile(currentBlockIndex, currentBlock);
+        }
+
         int newBlockIndex = blockCount;
         Block<T> newBlock = new Block<>(recordsPerBlock, recordClass);
         if (newBlock.addRecord(data)) {
-            saveBlockToFile(newBlockIndex, newBlock);
             blockCount++;
             if (!newBlock.isFull()) {
                 partiallyEmptyBlocks.add(newBlockIndex);
@@ -186,7 +189,9 @@ public class HeapFile<T extends IRecord<T>> {
     }
 
     private void saveCurrentAndLoadBlock(int blockIndex) {
-        saveBlockToFile(currentBlockIndex, currentBlock);
+        if (currentBlock != null && currentBlockIndex >= 0) {
+            saveBlockToFile(currentBlockIndex, currentBlock);
+        }
         loadBlockFromFile(blockIndex);
     }
 
@@ -245,14 +250,40 @@ public class HeapFile<T extends IRecord<T>> {
     }
 
     private void truncateEmptyBlocksAtEnd() {
+        int lastNonEmptyBlock = -1;
+
+        // Prejdeme všetky bloky od konca a nájdeme posledný neprázdny
         for (int i = blockCount - 1; i >= 0; i--) {
             saveCurrentAndLoadBlock(i);
-            if (currentBlock != null && currentBlock.isEmpty()) {
+            if (currentBlock != null && !currentBlock.isEmpty()) {
+                lastNonEmptyBlock = i;
+                break;
+            }
+        }
+
+        // Nový počet blokov je o 1 viac ako index posledného neprázdneho bloku
+        int newBlockCount = lastNonEmptyBlock + 1;
+
+        if (newBlockCount < blockCount) {
+            // Odstrániť prázdne bloky z zoznamov
+            for (int i = blockCount - 1; i >= newBlockCount; i--) {
                 emptyBlocks.remove(Integer.valueOf(i));
-                truncateFileToBlock(i);
-                this.blockCount--;
-            } else {
-                break; // narazili sme na neprázdny blok
+                partiallyEmptyBlocks.remove(Integer.valueOf(i));
+            }
+
+            // Skrátiť súbor a aktualizovať počet
+            truncateFileToBlock(newBlockCount);
+            this.blockCount = newBlockCount;
+
+            // Aktualizovať aktuálny blok, ak bol odstránený
+            if (currentBlockIndex >= newBlockCount) {
+                if (newBlockCount > 0) {
+                    loadBlockFromFile(newBlockCount - 1);
+                    currentBlockIndex = newBlockCount - 1;
+                } else {
+                    currentBlock = null;
+                    currentBlockIndex = -1;
+                }
             }
         }
     }
@@ -274,6 +305,7 @@ public class HeapFile<T extends IRecord<T>> {
         if (currentBlock != null) {
             saveBlockToFile(currentBlockIndex, currentBlock);
         }
+
         saveHeader();
 
         try {
@@ -286,7 +318,9 @@ public class HeapFile<T extends IRecord<T>> {
     }
 
     public void printAllBlocks() {
-        saveBlockToFile(currentBlockIndex, currentBlock);
+        if (currentBlock != null) {
+            saveBlockToFile(currentBlockIndex, currentBlock);
+        }
 
         System.out.println("=== HEAP FILE BLOCKS ===");
         System.out.println("File: " + fileName);
@@ -306,5 +340,36 @@ public class HeapFile<T extends IRecord<T>> {
         }
 
         System.out.println("=== END OF HEAP FILE ===");
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        // Uloženie aktuálneho bloku pred načítaním všetkých
+        if (currentBlock != null) {
+            saveBlockToFile(currentBlockIndex, currentBlock);
+        }
+
+        sb.append("=== HEAP FILE BLOCKS ===\n");
+        sb.append("File: ").append(fileName).append("\n");
+        sb.append("Block size: ").append(blockSize).append("\n");
+        sb.append("Records per block: ").append(recordsPerBlock).append("\n");
+        sb.append("Empty blocks: ").append(emptyBlocks).append("\n");
+        sb.append("Partially empty blocks: ").append(partiallyEmptyBlocks).append("\n");
+        sb.append("Total blocks in file: ").append(getBlockCount()).append("\n\n");
+
+        // Prechod všetkými blokmi
+        for (int i = 0; i < getBlockCount(); i++) {
+            loadBlockFromFile(i);
+            if (currentBlock != null) {
+                sb.append("Block #").append(i).append(":\n");
+                sb.append(currentBlock.toString()).append("\n");
+            }
+        }
+
+        sb.append("=== END OF HEAP FILE ===");
+
+        return sb.toString();
     }
 }
