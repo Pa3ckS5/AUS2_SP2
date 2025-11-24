@@ -2,12 +2,11 @@ package heapfile;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.BitSet;
 
+//only with validCount
 public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>> {
     private int capacity;
     private ArrayList<T> records;
-    private final BitSet validRecords;
     private int validCount;
     private Class<T> recordClass;
 
@@ -15,7 +14,6 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         this.recordClass = recordClass;
         this.records = new ArrayList<>(capacity);
         this.capacity = capacity;
-        validRecords = new BitSet(capacity);
         this.validCount = 0;
 
         for (int i = 0; i < capacity; i++) {
@@ -29,11 +27,22 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
 
     public boolean addRecord(T record) {
         if (isPartiallyEmpty()) {
-            for (int i = 0; i < capacity; i++) {
-                if (!validRecords.get(i)) {
-                    records.set(i, record);
-                    validRecords.set(i);
-                    validCount++;
+            records.set(validCount, record);
+            validCount++;
+            return true;
+        }
+        return false;
+    }
+
+    public boolean removeRecord(T record) {
+        if (!isEmpty()) {
+            for (int i = 0; i < validCount; i++) {
+                T current = records.get(i);
+                if (current != null && current.isEqualTo(record)) {
+                    if (i != validCount - 1) {
+                        records.set(i, records.get(validCount - 1));
+                    }
+                    validCount--;
                     return true;
                 }
             }
@@ -41,33 +50,17 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         return false;
     }
 
-    public boolean removeRecord(T record) {
-        if (!isEmpty()) {
-            for (int i = 0; i < capacity; i++) {
-                if (validRecords.get(i)) {
-                    T current = records.get(i);
-                    if (current != null && current.isEqualTo(record)) {
-                        validRecords.clear(i);
-                        validCount--;
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
     public T getRecord(int index) {
-        if (index < 0 || index >= capacity || !validRecords.get(index)) {
+        if (index < 0 || index >= validCount) {
             return null;
         }
         return records.get(index);
     }
 
     public T getRecord(T  record) {
-        for (int i = 0; i < capacity; i++) {
+        for (int i = 0; i < validCount; i++) {
             T current = records.get(i);
-            if (validRecords.get(i) && current != null && current.isEqualTo(record)) {
+            if (current != null && current.isEqualTo(record)) {
                 return current;
             }
         }
@@ -89,9 +82,8 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
     @Override
     public int getSize() {
         try {
-            int bitmapSize = (int) Math.ceil(capacity / 8.0);
-            //validCount + capacity + bitmap + records
-            return Integer.BYTES + Integer.BYTES + bitmapSize + recordClass.newInstance().getSize() * capacity;
+            //validCount + records
+            return Integer.BYTES + recordClass.newInstance().getSize() * capacity;
         } catch (InstantiationException | IllegalAccessException e) {
             throw new RuntimeException(e);
         }
@@ -105,11 +97,6 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         try {
             // validCount
             hlpOutStream.writeInt(validCount);
-
-            // bitmap
-            byte[] bitmapBytes = validRecords.toByteArray();
-            hlpOutStream.writeInt(bitmapBytes.length);
-            hlpOutStream.write(bitmapBytes);
 
             // records
             for (T record : records) {
@@ -133,13 +120,6 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
 
             // validCount
             this.validCount = hlpInStream.readInt();
-
-            // bitmap
-            int bitmapLength = hlpInStream.readInt();
-            byte[] bitmapBytes = new byte[bitmapLength];
-            hlpInStream.readFully(bitmapBytes);
-            validRecords.clear();
-            validRecords.or(BitSet.valueOf(bitmapBytes));
 
             // records
             for (int i = 0; i < capacity; i++) {
@@ -171,28 +151,15 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("- %s (valid=%d, capacity=%d) %s\n", status, validCount, capacity, bitmapToString()));
+        sb.append(String.format("- %s (valid=%d, capacity=%d)\n", status, validCount, capacity));
         for (int i = 0; i < capacity; i++) {
             T record = records.get(i);
-            if (validRecords.get(i)) {
+            if (i < validCount) {
                 sb.append(String.format("  [%d]: %s\n", i, record != null ? record.toString() : "EMPTY"));
             } else {
                 sb.append(String.format("  [%d]: EMPTY\n", i));
             }
         }
-        return sb.toString();
-    }
-
-    private String bitmapToString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[");
-        for (int i = 0; i < capacity; i++) {
-            sb.append(validRecords.get(i) ? "1" : "0");
-            if (i < capacity - 1) {
-                sb.append(", ");
-            }
-        }
-        sb.append("]");
         return sb.toString();
     }
 
