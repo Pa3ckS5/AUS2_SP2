@@ -4,21 +4,21 @@ import java.io.*;
 import java.util.LinkedList;
 
 public class HeapFile<T extends IRecord<T>> {
-    private String fileName;
-    private String headerFileName;
-    private RandomAccessFile file;
+    protected String fileName;
+    protected String headerFileName;
+    protected RandomAccessFile file;
 
-    private Class<T> recordClass;
-    private int recordSize;
-    private int recordsPerBlock;
+    protected Class<T> recordClass;
+    protected int recordSize;
+    protected int recordsPerBlock;
 
-    private int blockSize;
-    private int blockCount;
-    private Block<T> currentBlock;
-    private int currentBlockIndex;
+    protected int blockSize;
+    protected int blockCount;
+    protected Block<T> currentBlock;
+    protected int currentBlockIndex;
 
-    private LinkedList<Integer> emptyBlocks;
-    private LinkedList<Integer> partiallyEmptyBlocks;
+    protected LinkedList<Integer> emptyBlocks;
+    protected LinkedList<Integer> partiallyEmptyBlocks;
 
 
     public HeapFile(String fileName, int blockSize, Class<T> recordClass) throws FileNotFoundException {
@@ -31,7 +31,7 @@ public class HeapFile<T extends IRecord<T>> {
 
         try {
             this.recordSize = recordClass.newInstance().getSize();
-            this.recordsPerBlock = blockSize / recordSize;
+            this.recordsPerBlock = (blockSize - Integer.BYTES) / recordSize; //validCount size
         } catch (InstantiationException | IllegalAccessException e) {
             throw new RuntimeException("Error creating record instance.", e);
         }
@@ -41,7 +41,7 @@ public class HeapFile<T extends IRecord<T>> {
     }
 
     public int insert(T data) {
-        // 1. Skús vložiť do aktuálneho bloku
+        // current block
         if (currentBlock != null && currentBlock.isPartiallyEmpty()) {
             if (currentBlock.addRecord(data)) {
                 if (currentBlock.isFull()) {
@@ -52,7 +52,7 @@ public class HeapFile<T extends IRecord<T>> {
             }
         }
 
-        // 2. Skús vložiť do čiastočne prázdneho bloku
+        // partially empty block
         if (!partiallyEmptyBlocks.isEmpty()) {
             int blockIndex = partiallyEmptyBlocks.getFirst();
             saveCurrentAndLoadBlock(blockIndex);
@@ -66,7 +66,7 @@ public class HeapFile<T extends IRecord<T>> {
             }
         }
 
-        // 3. Skús vložiť do prázdneho bloku
+        // empty block
         if (!emptyBlocks.isEmpty()) {
             int blockIndex = emptyBlocks.getFirst();
             saveCurrentAndLoadBlock(blockIndex);
@@ -80,13 +80,13 @@ public class HeapFile<T extends IRecord<T>> {
             }
         }
 
-        // 4. Vytvor nový blok
+        // new block
         if (currentBlock != null) {
             saveBlockToFile(currentBlockIndex, currentBlock);
         }
 
         int newBlockIndex = blockCount;
-        Block<T> newBlock = new Block<>(recordsPerBlock, recordClass);
+        Block<T> newBlock = createNewBlock(recordsPerBlock, recordClass);
         if (newBlock.addRecord(data)) {
             blockCount++;
             if (!newBlock.isFull()) {
@@ -97,7 +97,7 @@ public class HeapFile<T extends IRecord<T>> {
             return newBlockIndex;
         }
 
-        return -1; // Chyba
+        return -1; // error
     }
 
     public T get(int blockIndex, int recordIndex) {
@@ -153,7 +153,11 @@ public class HeapFile<T extends IRecord<T>> {
         return true;
     }
 
-    private void saveBlockToFile(int blockIndex, Block<T> block) {
+    protected Block<T> createNewBlock(int recordsPerBlock, Class<T> recordClass) {
+        return new Block<>(recordsPerBlock, recordClass);
+    }
+
+    protected void saveBlockToFile(int blockIndex, Block<T> block) {
         try {
             long position = (long) blockIndex * blockSize;
             file.seek(position);
@@ -163,7 +167,7 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private boolean loadBlockFromFile(int blockIndex) {
+    protected boolean loadBlockFromFile(int blockIndex) {
         try {
             long position = (long) blockIndex * blockSize;
             if (position >= file.length()) {
@@ -177,7 +181,7 @@ public class HeapFile<T extends IRecord<T>> {
                 return false;
             }
 
-            Block<T> block = new Block<>(recordsPerBlock, recordClass);
+            Block<T> block = createNewBlock(recordsPerBlock, recordClass);
             block.fromBytes(blockBytes);
             currentBlock = block;
             currentBlockIndex = blockIndex;
@@ -188,7 +192,7 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private void saveCurrentAndLoadBlock(int blockIndex) {
+    protected void saveCurrentAndLoadBlock(int blockIndex) {
         if (currentBlock != null && currentBlockIndex >= 0) {
             saveBlockToFile(currentBlockIndex, currentBlock);
         }
@@ -213,7 +217,7 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private void loadHeader() {
+    protected void loadHeader() {
         File headerFile = new File(headerFileName);
         if (!headerFile.exists()) {
             // Inicializácia pre nový súbor
@@ -297,7 +301,7 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private int getBlockCount() {
+    protected int getBlockCount() {
         return blockCount;
     }
 
@@ -322,7 +326,7 @@ public class HeapFile<T extends IRecord<T>> {
             saveBlockToFile(currentBlockIndex, currentBlock);
         }
 
-        System.out.println("=== HEAP FILE BLOCKS ===");
+        System.out.println("=== START OF FILE ===");
         System.out.println("File: " + fileName);
         System.out.println("Block size: " + blockSize);
         System.out.println("Records per block: " + recordsPerBlock);
@@ -339,7 +343,7 @@ public class HeapFile<T extends IRecord<T>> {
             }
         }
 
-        System.out.println("=== END OF HEAP FILE ===");
+        System.out.println("=== END OF FILE ===");
     }
 
     @Override
@@ -351,7 +355,7 @@ public class HeapFile<T extends IRecord<T>> {
             saveBlockToFile(currentBlockIndex, currentBlock);
         }
 
-        sb.append("=== HEAP FILE BLOCKS ===\n");
+        sb.append("=== START OF FILE ===\n");
         sb.append("File: ").append(fileName).append("\n");
         sb.append("Block size: ").append(blockSize).append("\n");
         sb.append("Records per block: ").append(recordsPerBlock).append("\n");
@@ -368,7 +372,7 @@ public class HeapFile<T extends IRecord<T>> {
             }
         }
 
-        sb.append("=== END OF HEAP FILE ===");
+        sb.append("=== END OF FILE ===");
 
         return sb.toString();
     }

@@ -3,7 +3,6 @@ package heapfile;
 import java.io.*;
 import java.util.ArrayList;
 
-//only with validCount
 public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>> {
     private int capacity;
     private ArrayList<T> records;

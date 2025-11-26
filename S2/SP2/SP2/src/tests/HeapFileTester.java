@@ -1,6 +1,6 @@
 package tests;
 
-import app.Patient;
+import whoApp.Patient;
 import heapfile.HeapFile;
 
 import java.io.FileNotFoundException;

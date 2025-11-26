@@ -1,6 +1,6 @@
 package tests;
 
-import app.Patient;
+import whoApp.Patient;
 import heapfile.Block;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -144,8 +144,6 @@ public class BlockUnitTester {
     @Test
     void testGetSize() {
         int expectedSize = Integer.BYTES + // validCount
-                Integer.BYTES + // bitmap length
-                (int) Math.ceil(3 / 8.0) + // bitmap size
                 new Patient().getSize() * 3; // records size
 
         assertEquals(expectedSize, block.getSize());

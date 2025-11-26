@@ -1,4 +1,4 @@
-package app;
+package whoApp;
 
 import javax.swing.*;
 import java.awt.*;
@@ -9,14 +9,14 @@ import java.awt.event.WindowEvent;
 
 
 
-public class GUI extends JFrame {
-    private SystemHF system;
+public class WhoGUI extends JFrame {
+    private WhoSystem system;
     private JTextArea outputArea;
     private JButton generateButton;
     private JButton printBlocksButton;
 
-    public GUI() {
-        this.system = new SystemHF(false);
+    public WhoGUI() {
+        this.system = new WhoSystem(false);
         initializeGUI();
         setupWindowListener();
     }
@@ -90,7 +90,7 @@ public class GUI extends JFrame {
                 int count = Integer.parseInt(input.trim());
                 system.generateRandomPatients(count);
                 outputArea.append("Generated " + count + " patients.\n");
-                outputArea.append("Total patients in system: " + getPatientCount() + "\n\n");
+                outputArea.append("Total patients in system: " + system.getPatientCount() + "\n\n");
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(this,
                         "Invalid number format!", "Error", JOptionPane.ERROR_MESSAGE);
@@ -102,25 +102,15 @@ public class GUI extends JFrame {
         String blocksInfo = system.getBlocksForPrint();
         outputArea.append("=== BLOCKS WITH RECORDS ===\n");
         outputArea.append(blocksInfo);
-        outputArea.append("\nTotal patients in system: " + getPatientCount() + "\n");
+        outputArea.append("\nTotal patients in system: " + system.getPatientCount() + "\n");
         outputArea.append("============================\n\n");
-    }
-
-    private int getPatientCount() {
-        try {
-            java.lang.reflect.Field field = system.getClass().getDeclaredField("patientsCount");
-            field.setAccessible(true);
-            return (int) field.get(system);
-        } catch (Exception e) {
-            return 0; // Fallback value
-        }
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                new GUI().setVisible(true);
+                new WhoGUI().setVisible(true);
             }
         });
     }
