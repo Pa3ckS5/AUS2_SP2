@@ -1,7 +1,7 @@
 package tests;
 
 import whoApp.Patient;
-import heapfile.HeapFile;
+import file.heapfile.HeapFile;
 
 import java.io.FileNotFoundException;
 import java.time.LocalDate;

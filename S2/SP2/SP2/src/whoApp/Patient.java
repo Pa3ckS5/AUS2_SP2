@@ -1,6 +1,6 @@
 package whoApp;
 
-import heapfile.IRecord;
+import file.IRecord;
 
 import java.io.*;
 import java.time.LocalDate;
@@ -49,10 +49,10 @@ public class Patient implements IRecord<Patient> {
         this.patientId = cutString(patientId, MAX_PATIENT_ID_LENGTH);
     }
 
-    public String getFirstName() { return firstName.trim(); }
-    public String getLastName() { return lastName.trim(); }
+    public String getFirstName() { return firstName; }
+    public String getLastName() { return lastName; }
     public LocalDate getBirthDate() { return birthDate; }
-    public String getPatientId() { return patientId.trim(); }
+    public String getPatientId() { return patientId; }
 
     @Override
     public int getSize() {
@@ -102,7 +102,7 @@ public class Patient implements IRecord<Patient> {
             this.lastNameLength = hlpInStream.readInt();
             this.lastName = "";
             for (int i = 0; i < MAX_LAST_NAME_LENGTH; i++) {
-                if (i < firstNameLength) {
+                if (i < lastNameLength) {
                     this.lastName += hlpInStream.readChar();
                 } else {
                     hlpInStream.readChar();
@@ -128,7 +128,7 @@ public class Patient implements IRecord<Patient> {
             this.patientIdLength = hlpInStream.readInt();
             this.patientId = "";
             for (int i = 0; i < MAX_PATIENT_ID_LENGTH; i++) {
-                if (i < firstNameLength) {
+                if (i < patientIdLength) {
                     this.patientId += hlpInStream.readChar();
                 } else {
                     hlpInStream.readChar();
@@ -154,7 +154,7 @@ public class Patient implements IRecord<Patient> {
 
     @Override
     public String toString() {
-        return String.format("%s %s (%s) %s}",
+        return String.format("%s %s (%s) %s",
                 getFirstName(), getLastName(), getPatientId(), birthDate);
     }
 

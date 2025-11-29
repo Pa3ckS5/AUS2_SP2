@@ -1,13 +1,16 @@
-package heapfile;
+package file.heapfile;
+
+import file.IBinarySerializable;
+import file.IRecord;
 
 import java.io.*;
 import java.util.ArrayList;
 
 public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>> {
-    private int capacity;
-    private ArrayList<T> records;
-    private int validCount;
-    private Class<T> recordClass;
+    protected int capacity;
+    protected ArrayList<T> records;
+    protected int validCount;
+    protected Class<T> recordClass;
 
     public Block(int capacity, Class<T> recordClass) {
         this.recordClass = recordClass;
@@ -67,7 +70,17 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
     }
 
     public ArrayList<T> getRecords() {
-        return records;
+        ArrayList<T> r =  new ArrayList<>(validCount);
+        for (int i = 0; i < validCount; i++) {
+            r.add(records.get(i));
+        }
+        return r;
+    }
+
+    public ArrayList<T> clear() {
+        ArrayList<T> r =  getRecords();
+        validCount = 0;
+        return r;
     }
 
     public int getValidCount() {
@@ -84,8 +97,9 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
             //validCount + records
             return Integer.BYTES + recordClass.newInstance().getSize() * capacity;
         } catch (InstantiationException | IllegalAccessException e) {
-            throw new RuntimeException(e);
+            System.out.println("Cannot get record size");;
         }
+        return -1;
     }
 
     @Override

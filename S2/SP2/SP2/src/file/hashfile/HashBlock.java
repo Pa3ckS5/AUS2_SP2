@@ -1,8 +1,10 @@
-package hashfile;
+package file.hashfile;
 
-import heapfile.IRecord;
+import file.IRecord;
+import file.overflowfile.LinkedBlock;
 
 import java.io.*;
+import java.util.ArrayList;
 
 public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
     private int recordCount;
@@ -32,6 +34,16 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
         }
     }
 
+    public void incrementOverflowBlockCount() {
+        this.overflowBlockCount++;
+    }
+
+    public void decrementOverflowBlockCount() {
+        if (this.overflowBlockCount > 0) {
+            this.overflowBlockCount--;
+        }
+    }
+
     public void resetRecordCount() {
         this.recordCount = 0;
     }
@@ -39,7 +51,7 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
     @Override
     public int getSize() {
         try {
-            // LinkedBlock + recordCount
+            // LinkedBlock + recordCount + overflowBlockCount
             return super.getSize() + Integer.BYTES;
         } catch (Exception e) {
             throw new RuntimeException("Error calculating block size", e);
@@ -57,6 +69,9 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
 
             // recordCount
             hlpOutStream.writeInt(recordCount);
+
+            // overflowBlockCount
+            hlpOutStream.writeInt(overflowBlockCount);
 
         } catch (IOException e) {
             throw new IllegalStateException("Error during conversion to byte array.");
@@ -78,6 +93,9 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
             // recordCount
             this.recordCount = hlpInStream.readInt();
 
+            // overflowBlockCount
+            this.overflowBlockCount = hlpInStream.readInt();
+
         } catch (IOException e) {
             throw new IllegalStateException("Error during conversion from byte array.", e);
         }
@@ -90,10 +108,21 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
         StringBuilder sb = new StringBuilder();
         sb.append(super.toString());
         sb.append(String.format("Total records in chain: %d\n", recordCount));
+        sb.append(String.format("Total blocks in chain: %d\n", overflowBlockCount));
         return sb.toString();
     }
 
     public int getOverflowBlockCount() {
         return overflowBlockCount;
+    }
+
+    @Override
+    public ArrayList<T> clear() {
+        ArrayList<T> r =  getRecords();
+        validCount = 0;
+        recordCount = 0;
+        overflowBlockCount = 0;
+
+        return r;
     }
 }

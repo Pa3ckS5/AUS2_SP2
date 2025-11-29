@@ -1,20 +1,16 @@
-package hashfile;
+package file.overflowfile;
 
-import heapfile.Block;
-import heapfile.IRecord;
-
+import file.heapfile.Block;
+import file.IRecord;
 import java.io.*;
+import java.util.ArrayList;
 
 public class LinkedBlock<T extends IRecord<T>> extends Block<T> {
-    private int nextBlock;
+    protected int nextBlock;
 
     public LinkedBlock(int capacity, Class<T> recordClass) {
         super(capacity, recordClass);
         this.nextBlock = -1;
-    }
-
-    public int getNextBlock() {
-        return nextBlock;
     }
 
     public void setNextBlock(int nextBlock) {
@@ -78,11 +74,22 @@ public class LinkedBlock<T extends IRecord<T>> extends Block<T> {
         return sb.toString();
     }
 
+    public int getNextBlock() {
+        return nextBlock;
+    }
+
     public boolean hasNextBlock() {
         return nextBlock != -1;
     }
 
     public void clearNextBlock() {
         this.nextBlock = -1;
+    }
+
+    @Override
+    public ArrayList<T> clear() {
+        ArrayList<T> r =  super.clear();
+        clearNextBlock();
+        return r;
     }
 }

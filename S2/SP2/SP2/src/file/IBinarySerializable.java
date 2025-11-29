@@ -1,4 +1,4 @@
-package heapfile;
+package file;
 
 public interface IBinarySerializable<T> {
     int getSize();

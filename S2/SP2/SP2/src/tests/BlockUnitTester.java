@@ -1,7 +1,7 @@
 package tests;
 
 import whoApp.Patient;
-import heapfile.Block;
+import file.heapfile.Block;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

@@ -1,7 +1,6 @@
 package whoApp;
 
-import hashfile.HashFile;
-import heapfile.HeapFile;
+import file.heapfile.HeapFile;
 
 import java.io.FileNotFoundException;
 import java.time.LocalDate;
@@ -9,8 +8,8 @@ import java.time.LocalDateTime;
 import java.util.Random;
 
 public class WhoSystem {
-    private HashFile<Patient> patients;
-    private HashFile<PcrTest> pcrTests;
+    private HeapFile<Patient> patients;
+    private HeapFile<PcrTest> pcrTests;
 
     private int nextPatientId;
     private int patientCount;
@@ -22,8 +21,8 @@ public class WhoSystem {
         patientCount = 0;
 
         try {
-            this.patients = new HashFile<>("patients", 560, Patient.class);
-            this.pcrTests = new HashFile<>("pcrTests", 560, PcrTest.class);
+            this.patients = new HeapFile<>("patients", 560,   Patient.class);
+            this.pcrTests = new HeapFile<>("pcrTests", 560,  PcrTest.class);
         } catch (FileNotFoundException e) {
             java.lang.System.out.println("File not found");
         }
