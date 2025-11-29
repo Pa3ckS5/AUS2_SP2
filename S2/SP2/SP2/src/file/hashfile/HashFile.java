@@ -152,6 +152,13 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
 
     private void checkFilling() {
         //todo
+        double fill = 0.0;
+
+        if (fill > 0.8) {
+            increaseHash();
+        } else if (fill < 0.4) {
+            decreaseHash();
+        }
     }
 
     @Override
