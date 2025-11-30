@@ -95,8 +95,10 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
             return createNewBlockAtSpecificIndex(record, firstBlockIndex);
         }
 
+    }
 
-
+    public int getCapacity() {
+        return this.blockCount * this.recordsPerBlock;
     }
 
     private int createNewBlockAtSpecificIndex(T record, int targetBlockIndex) {

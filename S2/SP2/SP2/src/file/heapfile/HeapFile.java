@@ -8,7 +8,7 @@ import java.util.LinkedList;
 public class HeapFile<T extends IRecord<T>> {
     protected String fileName;
     protected RandomAccessFile file;
-    protected String headerFileName;
+    protected String heapFileName;
 
     protected Class<T> recordClass;
     protected int recordSize;
@@ -23,7 +23,7 @@ public class HeapFile<T extends IRecord<T>> {
 
     public HeapFile(String fileName, int blockSize, Class<T> recordClass) throws FileNotFoundException {
         this.fileName = fileName + ".dat";
-        this.headerFileName = fileName + ".hdr";
+        this.heapFileName = fileName + "_heap.dat";
         this.blockSize = blockSize;
         this.blockCount = 0;
         this.recordClass = recordClass;
@@ -38,7 +38,7 @@ public class HeapFile<T extends IRecord<T>> {
         }
 
         this.file = new RandomAccessFile(fileName + ".dat", "rw");
-        loadHeader();
+        loadHeapFile();
     }
 
     public int insert(T record) {
@@ -171,8 +171,8 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private void saveHeader() {
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(headerFileName))) {
+    private void saveHeapFile() {
+        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(heapFileName))) {
             dos.writeInt(blockCount);
 
             dos.writeInt(emptyBlocks.size());
@@ -189,8 +189,8 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private void loadHeader() {
-        File headerFile = new File(headerFileName);
+    private void loadHeapFile() {
+        File headerFile = new File(heapFileName);
         if (!headerFile.exists()) {
             // Inicializácia pre nový súbor
             this.blockCount = 0;
@@ -254,12 +254,12 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    protected int getBlockCount() {
+    public int getBlockCount() {
         return blockCount;
     }
 
     public void close() {
-        saveHeader();
+        saveHeapFile();
 
         try {
             if (file != null) {

@@ -52,7 +52,7 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
     public int getSize() {
         try {
             // LinkedBlock + recordCount + overflowBlockCount
-            return super.getSize() + Integer.BYTES;
+            return super.getSize() + 2 * Integer.BYTES;
         } catch (Exception e) {
             throw new RuntimeException("Error calculating block size", e);
         }
