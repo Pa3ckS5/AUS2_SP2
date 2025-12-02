@@ -44,6 +44,14 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
         }
     }
 
+    public void resetOverflowBlockCount() {
+        this.overflowBlockCount = 0;
+    }
+
+    public void setOverflowBlockCount(int overflowBlockCount) {
+        this.overflowBlockCount = overflowBlockCount;
+    }
+
     public void resetRecordCount() {
         this.recordCount = 0;
     }
@@ -108,7 +116,7 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
         StringBuilder sb = new StringBuilder();
         sb.append(super.toString());
         sb.append(String.format("Total records in chain: %d\n", recordCount));
-        sb.append(String.format("Total blocks in chain: %d\n", overflowBlockCount));
+        sb.append(String.format("Overflow blocks in chain: %d\n", overflowBlockCount));
         return sb.toString();
     }
 
@@ -122,6 +130,7 @@ public class HashBlock<T extends IRecord<T>> extends LinkedBlock<T> {
         validCount = 0;
         recordCount = 0;
         overflowBlockCount = 0;
+        clearNextBlock();
 
         return r;
     }

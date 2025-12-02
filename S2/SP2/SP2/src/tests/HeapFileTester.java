@@ -13,7 +13,6 @@ public class HeapFileTester {
     public void testMethods(boolean initialFilling) {
         int repsNum = 100;
         int methodCallsNum = 1000;
-        int maxValue = 100_000;
         int initialElementsNum = 500;
 
         Random r = new Random(0);
@@ -145,7 +144,7 @@ public class HeapFileTester {
     }
 
     private void deleteTestFiles(String baseName) {
-        String[] extensions = {".dat", ".hdr"};
+        String[] extensions = {".dat", "_heap.dat"};
         for (String ext : extensions) {
             java.io.File file = new java.io.File(baseName + ext);
             if (file.exists()) {

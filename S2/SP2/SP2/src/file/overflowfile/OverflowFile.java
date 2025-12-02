@@ -20,21 +20,18 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
     }
 
     public int insertToFirst(T record) {
-        // Hľadanie prvého prázdneho bloku (najmenší index v zozname emptyBlocks)
+
         if (!emptyBlocks.isEmpty()) {
-            // Získame a zoradíme prázdne bloky podľa indexu (od najmenšieho)
+
             emptyBlocks.sort(Integer::compareTo);
             int firstEmptyBlockIndex = emptyBlocks.getFirst();
 
-            // Načítame prázdny blok
             LinkedBlock<T> emptyBlock = loadBlock(firstEmptyBlockIndex);
 
             if (emptyBlock != null && emptyBlock.addRecord(record)) {
-                // Uložíme blok s novým záznamom
                 saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
 
-                // Aktualizujeme zoznamy blokov
-                emptyBlocks.remove(Integer.valueOf(firstEmptyBlockIndex));
+                emptyBlocks.removeFirst();
 
                 if (emptyBlock.isPartiallyEmpty()) {
                     partiallyEmptyBlocks.add(firstEmptyBlockIndex);
@@ -44,9 +41,9 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
             }
         }
 
-        // Ak nie je žiadny voľný prázdny blok, vytvoríme nový na konci súboru
+        // new block at end
         int newBlockIndex = blockCount;
-        LinkedBlock<T> newBlock = (LinkedBlock<T>) createNewBlock();
+        LinkedBlock<T> newBlock = createNewBlock();
 
         if (newBlock.addRecord(record)) {
             saveBlockToFile(newBlockIndex, newBlock);
@@ -60,100 +57,91 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
             return newBlockIndex;
         }
 
-        return -1; // Chyba pri vkladaní
+        return -1; // error
     }
 
-    public int insertToChain(int firstBlockIndex, T record) {
+    public boolean insertToChain(int firstBlockIndex, T record) {
         if (firstBlockIndex < blockCount) {
             int currentBlockIndex = firstBlockIndex;
+            int previousBlockIndex = -1;
 
             while (currentBlockIndex != -1) {
                 LinkedBlock<T> block = loadBlock(currentBlockIndex);
 
                 if (block == null) {
-                    return -1;
+                    return false;
                 }
 
-                // Skús vložiť záznam do aktuálneho bloku
                 if (block.addRecord(record)) {
                     saveBlockToFile(currentBlockIndex, block);
-
-                    // Aktualizujte zoznamy prázdnych a čiastočne prázdnych blokov
                     updateBlockLists(currentBlockIndex, block);
 
-                    return currentBlockIndex;
+                    return false;
                 }
 
-                // Ak je blok plný, presuňte sa na ďalší blok v reťazci
+                previousBlockIndex = currentBlockIndex;
                 currentBlockIndex = block.getNextBlock();
             }
 
-            // Ak sme prešli celý reťazec a nenašli sme miesto, vytvorte nový blok
-            return createNewBlockInChain(record, firstBlockIndex);
-        } else  {
-            // vytvorenie - novy blok na danom indexe a zapisanie do suboru
-            return createNewBlockAtSpecificIndex(record, firstBlockIndex);
-        }
+            createNewBlockInChain(record, previousBlockIndex);
+            return true;
+        } else {
 
+            System.out.println("Error in insertToChain - index out of bounds");
+            return false;
+        }
     }
 
     public int getCapacity() {
-        return this.blockCount * this.recordsPerBlock;
+        return (this.blockCount - emptyBlocks.size()) * this.recordsPerBlock;
     }
 
-    private int createNewBlockAtSpecificIndex(T record, int targetBlockIndex) {
-        // Ak je targetBlockIndex väčší ako aktuálny počet blokov, musíme vytvoriť medzibloky
-        while (blockCount <= targetBlockIndex) {
-            if (blockCount == targetBlockIndex) {
-                // Vytvoríme cieľový blok
-                LinkedBlock<T> newBlock = (LinkedBlock<T>) createNewBlock();
 
-                if (newBlock.addRecord(record)) {
-                    saveBlockToFile(targetBlockIndex, newBlock);
-                    blockCount++;
+    private int createNewBlockInChain(T record, int lastBlockIndex) {
 
-                    // Aktualizujte zoznamy
-                    if (!newBlock.isFull()) {
-                        partiallyEmptyBlocks.add(targetBlockIndex);
-                    }
+        if (!emptyBlocks.isEmpty()) {
+            emptyBlocks.sort(Integer::compareTo);
+            int firstEmptyBlockIndex = emptyBlocks.getFirst();
 
-                    return targetBlockIndex;
-                } else {
-                    return -1; // Chyba pri vkladaní
+            LinkedBlock<T> emptyBlock = loadBlock(firstEmptyBlockIndex);
+
+            if (emptyBlock != null && emptyBlock.addRecord(record)) {
+
+                // pre istotu zruš starý nextBlock (ak tam nejaký bol)
+                emptyBlock.setNextBlock(-1);
+
+                // prepoj predchádzajúci blok reťazca na tento blok
+                if (lastBlockIndex != -1) {
+                    LinkedBlock<T> lastBlock = loadBlock(lastBlockIndex);
+                    lastBlock.setNextBlock(firstEmptyBlockIndex);
+                    saveBlockToFile(lastBlockIndex, lastBlock);
                 }
-            } else {
-                // Vytvoríme prázdny medziblok
-                LinkedBlock<T> emptyBlock = (LinkedBlock<T>) createNewBlock();
-                saveBlockToFile(blockCount, emptyBlock);
-                blockCount++;
 
-                // Pridáme do zoznamu prázdnych blokov
-                emptyBlocks.add(blockCount - 1);
+                // ulož samotný nový blok
+                saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
+
+                // Aktualizuj zoznamy blokov
+                emptyBlocks.removeFirst();
+
+                if (emptyBlock.isPartiallyEmpty()) {
+                    partiallyEmptyBlocks.add(firstEmptyBlockIndex);
+                }
+
+                return firstEmptyBlockIndex;
             }
         }
 
-        return -1; // Nemalo by nastať
-    }
-
-    private int createNewBlockInChain(T record, int chainStartIndex) {
-        // Nájdite koniec reťazca
-        int lastBlockIndex = findLastBlockInChain(chainStartIndex);
-
-        // Vytvorte nový blok
         int newBlockIndex = blockCount;
-        LinkedBlock<T> newBlock = (LinkedBlock<T>) createNewBlock();
+        LinkedBlock<T> newBlock = createNewBlock();
 
         if (newBlock.addRecord(record)) {
-            // Uložte nový blok
             saveBlockToFile(newBlockIndex, newBlock);
             blockCount++;
 
-            // Aktualizujte zoznamy
             if (!newBlock.isFull()) {
                 partiallyEmptyBlocks.add(newBlockIndex);
             }
 
-            // Prepojte predchádzajúci blok na nový blok
             if (lastBlockIndex != -1) {
                 LinkedBlock<T> lastBlock = loadBlock(lastBlockIndex);
                 lastBlock.setNextBlock(newBlockIndex);
@@ -164,23 +152,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         }
 
         return -1;
-    }
-
-    private int findLastBlockInChain(int startBlockIndex) {
-        int currentBlockIndex = startBlockIndex;
-        int lastBlockIndex = -1;
-
-        while (currentBlockIndex != -1) {
-            LinkedBlock<T> block = loadBlock(currentBlockIndex);
-            if (block == null) {
-                break;
-            }
-
-            lastBlockIndex = currentBlockIndex;
-            currentBlockIndex = block.getNextBlock();
-        }
-
-        return lastBlockIndex;
     }
 
     @Override
@@ -227,7 +198,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
                 recordDeleted = true;
                 saveBlockToFile(currentBlockIndex, block);
 
-                // Aktualizujte zoznamy blokov
                 updateBlockListsAfterDelete(currentBlockIndex, block, wasFull);
             }
 
@@ -255,7 +225,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
 
             int nextBlockIndex = currentBlock.getNextBlock();
             linkedRecords.addAll(currentBlock.clear());
-            currentBlock.clearNextBlock();
 
             saveBlockToFile(currentBlockIndex, currentBlock);
             emptyBlocks.add(currentBlockIndex);
@@ -264,14 +233,13 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
             currentBlockIndex = nextBlockIndex;
         }
 
+        //truncateEmptyBlocksAtEnd();
         return linkedRecords;
     }
 
     private void updateBlockLists(int blockIndex, LinkedBlock<T> block) {
-        // Odstráňte blok zo zoznamu prázdnych blokov, ak tam bol
         emptyBlocks.remove(Integer.valueOf(blockIndex));
 
-        // Aktualizujte zoznam čiastočne prázdnych blokov
         if (block.isFull()) {
             partiallyEmptyBlocks.remove(Integer.valueOf(blockIndex));
         } else if (!partiallyEmptyBlocks.contains(blockIndex)) {
@@ -288,28 +256,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
                 partiallyEmptyBlocks.add(blockIndex);
             }
         }
-    }
-
-    // Pomocná metóda na získanie celého reťazca blokov
-    public LinkedList<Integer> getBlockChain(int startBlockIndex) {
-        LinkedList<Integer> chain = new LinkedList<>();
-        int currentBlockIndex = startBlockIndex;
-
-        while (currentBlockIndex != -1) {
-            chain.add(currentBlockIndex);
-            LinkedBlock<T> block = loadBlock(currentBlockIndex);
-            if (block == null) {
-                break;
-            }
-            currentBlockIndex = block.getNextBlock();
-        }
-
-        return chain;
-    }
-
-    // Pomocná metóda na zistenie dĺžky reťazca
-    public int getChainLength(int startBlockIndex) {
-        return getBlockChain(startBlockIndex).size();
     }
 
     @Override

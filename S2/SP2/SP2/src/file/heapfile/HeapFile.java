@@ -167,7 +167,8 @@ public class HeapFile<T extends IRecord<T>> {
             return block;
 
         } catch (IOException e) {
-            throw new IllegalStateException("Error loading block from file.", e);
+            System.out.println("Error loading block " + blockIndex);
+            return null;
         }
     }
 
@@ -217,7 +218,7 @@ public class HeapFile<T extends IRecord<T>> {
         }
     }
 
-    private void truncateEmptyBlocksAtEnd() {
+    protected int getLastNonEmptyBlock() {
         int lastNonEmptyBlock = -1;
 
         // Prejdeme všetky bloky od konca a nájdeme posledný neprázdny
@@ -228,29 +229,35 @@ public class HeapFile<T extends IRecord<T>> {
                 break;
             }
         }
+        return lastNonEmptyBlock;
+    }
 
-        // Nový počet blokov je o 1 viac ako index posledného neprázdneho bloku
-        int newBlockCount = lastNonEmptyBlock + 1;
+    public void truncateEmptyBlocksAtEnd() {
+        int lastNonEmptyBlock = getLastNonEmptyBlock();
+        if (lastNonEmptyBlock >= 0) {
+            // Nový počet blokov je o 1 viac ako index posledného neprázdneho bloku
+            int newBlockCount = lastNonEmptyBlock + 1;
 
-        if (newBlockCount < blockCount) {
-            // Odstrániť prázdne bloky z zoznamov
-            for (int i = blockCount - 1; i >= newBlockCount; i--) {
-                emptyBlocks.remove(Integer.valueOf(i));
-                partiallyEmptyBlocks.remove(Integer.valueOf(i));
+            if (newBlockCount < blockCount) {
+                // Odstrániť prázdne bloky z zoznamov
+                for (int i = blockCount - 1; i >= newBlockCount; i--) {
+                    emptyBlocks.remove(Integer.valueOf(i));
+                    partiallyEmptyBlocks.remove(Integer.valueOf(i));
+                }
+
+                // Skrátiť súbor a aktualizovať počet
+                truncateFileToBlock(newBlockCount);
+                this.blockCount = newBlockCount;
             }
-
-            // Skrátiť súbor a aktualizovať počet
-            truncateFileToBlock(newBlockCount);
-            this.blockCount = newBlockCount;
         }
     }
 
     private void truncateFileToBlock(int blockIndex) {
-        try (RandomAccessFile raf = new RandomAccessFile(fileName, "rw")) {
             long newLength = (long) blockIndex * blockSize;
-            raf.setLength(newLength);
+        try {
+            file.setLength(newLength);
         } catch (IOException e) {
-            throw new IllegalStateException("Error truncating file.", e);
+            System.out.println("Error truncating block " + blockIndex + "!");
         }
     }
 
@@ -266,7 +273,7 @@ public class HeapFile<T extends IRecord<T>> {
                 file.close();
             }
         } catch (IOException e) {
-            throw new RuntimeException("Error closing file", e);
+            System.out.println("Error closing file!");
         }
     }
 
@@ -315,5 +322,9 @@ public class HeapFile<T extends IRecord<T>> {
         sb.append("=== END OF FILE ===");
 
         return sb.toString();
+    }
+
+    public int getRecordsPerBlock() {
+        return recordsPerBlock;
     }
 }
