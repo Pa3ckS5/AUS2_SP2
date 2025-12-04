@@ -11,19 +11,21 @@ import java.util.Random;
 public class HeapFileTester {
 
     public void testMethods(boolean initialFilling) {
+        String fileName = "test_patients";
+
         int repsNum = 100;
         int methodCallsNum = 1000;
         int initialElementsNum = 500;
 
         Random r = new Random(0);
         LinkedList<PatientBlockPair> linkedList = new LinkedList<>();
-        deleteTestFiles("patients");
+        deleteTestFiles(fileName);
 
         // my structure
         HeapFile<Patient> heapFile = null;
 
         try {
-            heapFile = new HeapFile<>("patients", 512, Patient.class);
+            heapFile = new HeapFile<>(fileName, 512, Patient.class);
         } catch (FileNotFoundException e) {
             System.out.println("File not found");
             return;
@@ -117,7 +119,7 @@ public class HeapFileTester {
 
         System.out.println(String.format("\nSummary: %d/%d passed", numEquals, numEquals + numNotEquals));
 
-        deleteTestFiles("patients");
+        deleteTestFiles(fileName);
     }
 
     private boolean verifyAllRecords(HeapFile<Patient> heapFile, LinkedList<PatientBlockPair> linkedList) {

@@ -5,12 +5,16 @@ import file.IRecord;
 import java.io.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Patient implements IRecord<Patient> {
     private String firstName;
     private String lastName;
     private LocalDate birthDate;
     private String patientId;
+    private ArrayList<PcrTest> tests;
+    private static final int MAX_TESTS = 8;
 
     private static final int MAX_FIRST_NAME_LENGTH = 15;
     private static final int MAX_LAST_NAME_LENGTH = 14;
@@ -23,36 +27,75 @@ public class Patient implements IRecord<Patient> {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    public Patient() {
-        this("", "", LocalDate.of(2000, 1, 1), "");
-    }
-
     public Patient(String firstName, String lastName, LocalDate birthDate, String patientId) {
         setFirstName(firstName);
         setLastName(lastName);
         this.birthDate = birthDate;
         setPatientId(patientId);
+        tests = new ArrayList<>();
+    }
+
+    public Patient() {
+        this("", "", LocalDate.of(2000, 1, 1), "");
+    }
+
+    public Patient(String patientId) {
+        this("", "", LocalDate.of(2000, 1, 1), patientId);
+    }
+
+    public Patient(Patient patient) {
+        setFirstName(patient.getFirstName());
+        setLastName(patient.getLastName());
+        this.birthDate = patient.getBirthDate();
+        setPatientId(patient.getPatientId());
+        tests = patient.getTests();
+    }
+
+    public boolean insertTest(PcrTest test) {
+        if (tests.size() < MAX_TESTS) {
+            tests.add(test);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean removeTest(PcrTest test) {
+        for (int i = 0; i < tests.size(); i++) {
+            if (tests.get(i).equals(test)) {
+                tests.remove(i);
+                return true;
+            }
+        }
+        return false;
     }
 
     public void setFirstName(String firstName) {
-        this.firstNameLength = firstName.length();
         this.firstName = cutString(firstName, MAX_FIRST_NAME_LENGTH);
+        this.firstNameLength = firstName.length();
     }
 
     public void setLastName(String lastName) {
-        this.lastNameLength = lastName.length();
         this.lastName = cutString(lastName, MAX_LAST_NAME_LENGTH);
+        this.lastNameLength = lastName.length();
     }
 
     public void setPatientId(String patientId) {
-        this.patientIdLength = patientId.length();
         this.patientId = cutString(patientId, MAX_PATIENT_ID_LENGTH);
+        this.patientIdLength = patientId.length();
+    }
+
+    public void setBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
     }
 
     public String getFirstName() { return firstName; }
     public String getLastName() { return lastName; }
     public LocalDate getBirthDate() { return birthDate; }
     public String getPatientId() { return patientId; }
+
+    public ArrayList<PcrTest> getTests() {
+        return tests;
+    }
 
     @Override
     public int getSize() {

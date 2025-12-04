@@ -1,9 +1,9 @@
 package file.heapfile;
 
 import file.IRecord;
+import tree.bs.avl.AVLTree;
 
 import java.io.*;
-import java.util.LinkedList;
 
 public class HeapFile<T extends IRecord<T>> {
     protected String fileName;
@@ -17,8 +17,8 @@ public class HeapFile<T extends IRecord<T>> {
     protected int blockSize;
     protected int blockCount;
 
-    protected LinkedList<Integer> emptyBlocks;
-    protected LinkedList<Integer> partiallyEmptyBlocks;
+    protected AVLTree<Integer> emptyBlocks; //no duplicates
+    protected AVLTree<Integer> partiallyEmptyBlocks; //no duplicates
 
 
     public HeapFile(String fileName, int blockSize, Class<T> recordClass) throws FileNotFoundException {
@@ -27,8 +27,8 @@ public class HeapFile<T extends IRecord<T>> {
         this.blockSize = blockSize;
         this.blockCount = 0;
         this.recordClass = recordClass;
-        this.emptyBlocks = new LinkedList<>();
-        this.partiallyEmptyBlocks = new LinkedList<>();
+        this.emptyBlocks = new AVLTree<>();
+        this.partiallyEmptyBlocks = new AVLTree<>();
 
         try {
             this.recordSize = recordClass.newInstance().getSize();
@@ -37,20 +37,24 @@ public class HeapFile<T extends IRecord<T>> {
             throw new RuntimeException("Error creating record instance.", e);
         }
 
-        this.file = new RandomAccessFile(fileName + ".dat", "rw");
+        try {
+            this.file = new RandomAccessFile(fileName + ".dat", "rw");
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException("Error creating file at " + fileName, e);
+        }
+
         loadHeapFile();
     }
 
     public int insert(T record) {
         // partially empty block
         if (!partiallyEmptyBlocks.isEmpty()) {
-            partiallyEmptyBlocks.sort(Integer::compareTo);
-            int blockIndex = partiallyEmptyBlocks.getFirst();
+            int blockIndex = partiallyEmptyBlocks.findMin();
             Block<T> block = loadBlock(blockIndex);
             if (block.addRecord(record)) {
                 saveBlockToFile(blockIndex, block);
                 if (block.isFull()) {
-                    partiallyEmptyBlocks.removeFirst();
+                    partiallyEmptyBlocks.remove(blockIndex);
                 }
                 return blockIndex;
             }
@@ -58,14 +62,13 @@ public class HeapFile<T extends IRecord<T>> {
 
         // empty block
         if (!emptyBlocks.isEmpty()) {
-            emptyBlocks.sort(Integer::compareTo);
-            int blockIndex = emptyBlocks.getFirst();
+            int blockIndex = emptyBlocks.findMin();
 
             Block<T> block = loadBlock(blockIndex);
             if (block.addRecord(record)) {
                 saveBlockToFile(blockIndex, block);
                 if (block.isPartiallyEmpty()) {
-                    partiallyEmptyBlocks.add(blockIndex);
+                    partiallyEmptyBlocks.insert(blockIndex);
                 }
                 return blockIndex;
             }
@@ -78,7 +81,7 @@ public class HeapFile<T extends IRecord<T>> {
             saveBlockToFile(newBlockIndex, newBlock);
             blockCount++;
             if (!newBlock.isFull()) {
-                partiallyEmptyBlocks.add(newBlockIndex);
+                partiallyEmptyBlocks.insert(newBlockIndex);
             }
             return newBlockIndex;
         }
@@ -118,13 +121,13 @@ public class HeapFile<T extends IRecord<T>> {
 
             if (wasFull) {
                 if (block.isEmpty()) {
-                    emptyBlocks.add(blockIndex);
+                    emptyBlocks.insert(blockIndex);
                 } else if (block.isPartiallyEmpty()) {
-                    partiallyEmptyBlocks.add(blockIndex);
+                    partiallyEmptyBlocks.insert(blockIndex);
                 }
             } else if (block.isEmpty()) {
                 partiallyEmptyBlocks.remove(Integer.valueOf(blockIndex));
-                emptyBlocks.add(blockIndex);
+                emptyBlocks.insert(blockIndex);
 
             }
         }
@@ -142,11 +145,27 @@ public class HeapFile<T extends IRecord<T>> {
         try {
             long position = (long) blockIndex * blockSize;
             file.seek(position);
-            file.write(block.getBytes());
+
+            byte[] data = block.getBytes();
+
+            if (data.length > blockSize) {
+                throw new IllegalStateException(
+                        "Block bytes larger than blockSize! data=" + data.length + ", blockSize=" + blockSize
+                );
+            }
+
+            if (data.length < blockSize) {
+                byte[] padded = new byte[blockSize];
+                System.arraycopy(data, 0, padded, 0, data.length);
+                file.write(padded);
+            } else {
+                file.write(data);
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Error saving block in file.", e);
         }
     }
+
 
     protected Block<T> loadBlock(int blockIndex) {
         try {
@@ -176,15 +195,22 @@ public class HeapFile<T extends IRecord<T>> {
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(heapFileName))) {
             dos.writeInt(blockCount);
 
-            dos.writeInt(emptyBlocks.size());
-            for (Integer blockIndex : emptyBlocks) {
-                dos.writeInt(blockIndex);
+            int eSize = emptyBlocks.getNodeCount();
+            dos.writeInt(eSize);
+            if (eSize > 0) {
+                for (Integer blockIndex : emptyBlocks) {
+                    dos.writeInt(blockIndex);
+                }
             }
 
-            dos.writeInt(partiallyEmptyBlocks.size());
-            for (Integer blockIndex : partiallyEmptyBlocks) {
-                dos.writeInt(blockIndex);
+            int peSize = partiallyEmptyBlocks.getNodeCount();
+            dos.writeInt(peSize);
+            if (peSize > 0) {
+                for (Integer blockIndex : partiallyEmptyBlocks) {
+                    dos.writeInt(blockIndex);
+                }
             }
+
         } catch (IOException e) {
             throw new IllegalStateException("Error saving header file.", e);
         }
@@ -204,13 +230,13 @@ public class HeapFile<T extends IRecord<T>> {
             int emptyCount = dis.readInt();
             emptyBlocks.clear();
             for (int i = 0; i < emptyCount; i++) {
-                emptyBlocks.add(dis.readInt());
+                emptyBlocks.insert(dis.readInt());
             }
 
             int partialCount = dis.readInt();
             partiallyEmptyBlocks.clear();
             for (int i = 0; i < partialCount; i++) {
-                partiallyEmptyBlocks.add(dis.readInt());
+                partiallyEmptyBlocks.insert(dis.readInt());
             }
 
         } catch (IOException e) {
@@ -221,7 +247,7 @@ public class HeapFile<T extends IRecord<T>> {
     protected int getLastNonEmptyBlock() {
         int lastNonEmptyBlock = -1;
 
-        // Prejdeme všetky bloky od konca a nájdeme posledný neprázdny
+        // finding last non empty block
         for (int i = blockCount - 1; i >= 0; i--) {
             Block<T> block = loadBlock(i);
             if (block != null && !block.isEmpty()) {
@@ -234,30 +260,42 @@ public class HeapFile<T extends IRecord<T>> {
 
     public void truncateEmptyBlocksAtEnd() {
         int lastNonEmptyBlock = getLastNonEmptyBlock();
-        if (lastNonEmptyBlock >= 0) {
-            // Nový počet blokov je o 1 viac ako index posledného neprázdneho bloku
-            int newBlockCount = lastNonEmptyBlock + 1;
 
-            if (newBlockCount < blockCount) {
-                // Odstrániť prázdne bloky z zoznamov
-                for (int i = blockCount - 1; i >= newBlockCount; i--) {
-                    emptyBlocks.remove(Integer.valueOf(i));
-                    partiallyEmptyBlocks.remove(Integer.valueOf(i));
-                }
-
-                // Skrátiť súbor a aktualizovať počet
-                truncateFileToBlock(newBlockCount);
-                this.blockCount = newBlockCount;
+        // all empty
+        if (lastNonEmptyBlock == -1) {
+            if (blockCount > 0) {
+                truncateToBlock(0);
+                blockCount = 0;
+                emptyBlocks.clear();
+                partiallyEmptyBlocks.clear();
             }
+            return;
+        }
+
+        int newBlockCount = lastNonEmptyBlock + 1;
+
+        if (newBlockCount < blockCount) {
+            for (int i = blockCount - 1; i >= newBlockCount; i--) {
+                emptyBlocks.remove(Integer.valueOf(i));
+                partiallyEmptyBlocks.remove(Integer.valueOf(i));
+            }
+
+            truncateToBlock(newBlockCount);
+            this.blockCount = newBlockCount;
         }
     }
 
-    private void truncateFileToBlock(int blockIndex) {
-            long newLength = (long) blockIndex * blockSize;
+    protected void truncateLastBlock() {
+        truncateToBlock(blockCount - 1);
+        blockCount--;
+    }
+
+    private void truncateToBlock(int newBlockCount) {
+            long newLength = (long) newBlockCount * blockSize;
         try {
             file.setLength(newLength);
         } catch (IOException e) {
-            System.out.println("Error truncating block " + blockIndex + "!");
+            System.out.println("Error truncating block " + newBlockCount + "!");
         }
     }
 
@@ -282,8 +320,8 @@ public class HeapFile<T extends IRecord<T>> {
         System.out.println("File: " + fileName);
         System.out.println("Block size: " + blockSize);
         System.out.println("Records per block: " + recordsPerBlock);
-        System.out.println("Empty blocks: " + emptyBlocks);
-        System.out.println("Partially empty blocks: " + partiallyEmptyBlocks);
+        System.out.println("Empty blocks: " + emptyBlocks.nodesToString());
+        System.out.println("Partially empty blocks: " + partiallyEmptyBlocks.nodesToString());
         System.out.println("Total blocks in file: " + getBlockCount());
         System.out.println();
 
@@ -306,8 +344,8 @@ public class HeapFile<T extends IRecord<T>> {
         sb.append("File: ").append(fileName).append("\n");
         sb.append("Block size: ").append(blockSize).append("\n");
         sb.append("Records per block: ").append(recordsPerBlock).append("\n");
-        sb.append("Empty blocks: ").append(emptyBlocks).append("\n");
-        sb.append("Partially empty blocks: ").append(partiallyEmptyBlocks).append("\n");
+        sb.append("Empty blocks: ").append(emptyBlocks.nodesToString()).append("\n");
+        sb.append("Partially empty blocks: ").append(partiallyEmptyBlocks.nodesToString()).append("\n");
         sb.append("Total blocks in file: ").append(getBlockCount()).append("\n\n");
 
         // Prechod všetkými blokmi

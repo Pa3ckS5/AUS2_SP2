@@ -1,6 +1,5 @@
 package tests;
 
-import file.heapfile.HeapFile;
 import file.overflowfile.OverflowFile;
 import whoApp.Patient;
 
@@ -32,11 +31,11 @@ public class OverflowFileSimpleTest {
         System.out.println("=== TEST VKLADANIA ===");
         // Vloženie záznamov
 
-        int i0 = file.insertToFirst(patient1);
+        int i0 = file.insertToStart(patient1);
         System.out.println("Patient1 vložený: " + i0);
         System.out.println("Patient2 vložený: " + file.insertToChain(i0, patient2));
         System.out.println("Patient3 vložený: " + file.insertToChain(i0, patient3));
-        int i1 = file.insertToFirst(patient4);
+        int i1 = file.insertToStart(patient4);
         System.out.println("Patient4 vložený: " + i1);
         System.out.println("Patient5 vložený: " + file.insertToChain(i1, patient5));
         // Výpis všetkých blokov
@@ -70,7 +69,7 @@ public class OverflowFileSimpleTest {
         System.out.println("Patient7 vymazany i1: " + file.delete(i1, patient7));
         System.out.println("Patient7 vymazany i0: " + file.delete(i0, patient7));
 
-        int i2 = file.insertToFirst(patient10);
+        int i2 = file.insertToStart(patient10);
         System.out.println("Patient10 vložený: " + i2);
 
 

@@ -20,19 +20,20 @@ public class HashFileTester {
     private int failedPlacementTests = 0;
 
     public void testMethods(boolean initialFilling) {
+        String fileName = "test_pcrtests";
         int repsNum = 100;
         int methodCallsNum = 100;
         int initialElementsNum = 100;
 
         Random r = new Random(0);
         LinkedList<PcrTest> linkedList = new LinkedList<>();
-        deleteTestFiles("pcrtests");
+        deleteTestFiles(fileName);
 
         // my structure
         HashFile<PcrTest> hashFile = null;
 
         try {
-            hashFile = new HashFile<>("pcrtests", 512, 256, PcrTest.class);
+            hashFile = new HashFile<>(fileName, 512, 256, PcrTest.class);
         } catch (IOException e) {
             System.out.println("File not found or error creating hash file");
             return;
@@ -79,8 +80,8 @@ public class HashFileTester {
                     testFillingConsistency(hashFile);
 
                 } else if (methodProb >= 35 && methodProb < 66) {
-                    /*
                     // DELETE
+
                     if (!linkedList.isEmpty()) {
                         int removeIndex = r.nextInt(linkedList.size());
                         PcrTest testToRemove = linkedList.get(removeIndex);
@@ -90,10 +91,10 @@ public class HashFileTester {
 
                         // Perform deletion
                         boolean removedFromHash = hashFile.delete(testToRemove);
-                        linkedList.remove(removeIndex);
 
                         // Test after deletion
                         if (removedFromHash) {
+                            linkedList.remove(removeIndex);
                             testFindOperation(hashFile, testToRemove, false);
                             testFillingConsistency(hashFile);
                         } else {
@@ -102,8 +103,6 @@ public class HashFileTester {
                         }
                         totalDeleteTests++;
                     }
-
-                     */
 
                 } else {
                     // FIND
@@ -148,17 +147,13 @@ public class HashFileTester {
 
         // stats
         printTestStatistics();
-        hashFile.printStats();
+        hashFile.printStatistics();
 
         hashFile.close();
 
         System.out.println(String.format("\nSummary: %d/%d passed", numEquals, numEquals + numNotEquals));
 
-        deleteTestFiles("pcrtests");
-        deleteTestFiles("pcrtests_hash");
-        deleteTestFiles("pcrtests_heap");
-        deleteTestFiles("pcrtests_overflow");
-        deleteTestFiles("pcrtests_overflow_heap");
+        deleteTestFiles(fileName);
     }
 
     private void testRecordPlacementBeforeInsert(HashFile<PcrTest> hashFile, PcrTest test) {
@@ -198,7 +193,7 @@ public class HashFileTester {
 
     private void testFillingConsistency(HashFile<PcrTest> hashFile) {
         try {
-            hashFile.printStatistics();
+            //hashFile.printStatistics();
             testHashFileStructure(hashFile);
 
         } catch (Exception e) {
@@ -215,13 +210,13 @@ public class HashFileTester {
             }
 
             // Test that split pointer is within valid range
-//            int hashEdge = (int) Math.pow(2, getHashPower(hashFile)) * 2;
-//            int splitPointer = getSplitPointer(hashFile);
-//
-//            if (splitPointer < 0 || splitPointer >= hashEdge) {
-//                System.out.println("ERROR: Split pointer out of range: " + splitPointer);
-//                return false;
-//            }
+            int hashEdge = hashFile.getHashEdge();
+            int splitPointer = hashFile.getSplitPointer();
+
+            if (splitPointer < 0 || splitPointer >= hashEdge) {
+                System.out.println("ERROR: Split pointer out of range: " + splitPointer);
+                return false;
+            }
 
             // Test that record count is non-negative
             if (getRecordCount(hashFile) < 0) {
@@ -289,7 +284,7 @@ public class HashFileTester {
     }
 
     private void deleteTestFiles(String baseName) {
-        String[] extensions = {".dat", ".hdr", "_hash.dat", "_overflow.dat", "_overflow.hdr"};
+        String[] extensions = {".dat","_heap.dat", "_hash.dat", "_overflow.dat", "_overflow_heap.dat"};
         for (String ext : extensions) {
             java.io.File file = new java.io.File(baseName + ext);
             if (file.exists()) {

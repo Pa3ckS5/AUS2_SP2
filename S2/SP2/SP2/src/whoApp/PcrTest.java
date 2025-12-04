@@ -17,22 +17,23 @@ public class PcrTest implements IRecord<PcrTest>  {
 
     private static final int MAX_PATIENT_ID_LENGTH = 10;
     private static final int MAX_NOTE_LENGTH = 11;
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private static final int MAX_DATE_TIME_LENGTH = 19; //yyyy-MM-dd HH:mm:ss
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private int patientIdLenght;
-    private int noteLenght;
+    private int patientIdLength;
+    private int noteLength;
 
     public PcrTest(int testId, String patientId, LocalDateTime testDateTime,
                    boolean result, double testValue, String note) {
         this.testDateTime = testDateTime;
-        this.patientId = patientId;
+        setPatientId(patientId);
         this.testId = testId;
         this.result = result;
         this.testValue = testValue;
-        this.note = note;
+        setNote(note);
 
-        this.patientIdLenght = patientId != null ? patientId.length() : 0;
-        this.noteLenght = note != null ? note.length() : 0;
+        this.patientIdLength = patientId != null ? patientId.length() : 0;
+        this.noteLength = note != null ? note.length() : 0;
     }
 
     public PcrTest() {
@@ -43,8 +44,55 @@ public class PcrTest implements IRecord<PcrTest>  {
         this.testValue = 0.0;
         this.note = "";
 
-        this.patientIdLenght = 0;
-        this.noteLenght = 0;
+        this.patientIdLength = 0;
+        this.noteLength = 0;
+    }
+
+    public PcrTest(int testId) {
+        this.testDateTime = LocalDateTime.of(1, 1, 1, 0, 0, 0);
+        this.patientId = "";
+        this.testId = testId;
+        this.result = false;
+        this.testValue = 0.0;
+        this.note = "";
+
+        this.patientIdLength = 0;
+        this.noteLength = 0;
+    }
+
+    //copy
+    public PcrTest(PcrTest test) {
+        this.testDateTime = test.getTestDateTime();
+        setPatientId(test.getPatientId());
+        this.testId = test.getTestId();
+        this.result = test.getResult();
+        this.testValue = test.getTestValue();
+        setNote(test.getNote());
+
+        this.patientIdLength = patientId != null ? patientId.length() : 0;
+        this.noteLength = note != null ? note.length() : 0;
+    }
+
+    public void setPatientId(String patientId) {
+        this.patientId = cutString(patientId, MAX_PATIENT_ID_LENGTH);
+        this.patientIdLength = patientId.length();
+    }
+
+    public void setNote(String note) {
+        this.note = cutString(note, MAX_NOTE_LENGTH);
+        this.noteLength = note.length();
+    }
+
+    public void setTestDateTime(LocalDateTime dateTime) {
+        this.testDateTime = dateTime;
+    }
+
+    public void setResult(boolean result) {
+        this.result = result;
+    }
+
+    public void setTestValue(double value) {
+        this.testValue = value;
     }
 
     public int getTestId() { return testId; }
@@ -70,6 +118,10 @@ public class PcrTest implements IRecord<PcrTest>  {
         );
     }
 
+    public String showDate() {
+        return DATE_TIME_FORMATTER.format(testDateTime);
+    }
+
     @Override
     public int hashCode() {
         return Integer.hashCode(testId);
@@ -90,7 +142,7 @@ public class PcrTest implements IRecord<PcrTest>  {
         return Integer.BYTES + // testId
                 Integer.BYTES + // patientIdLength
                 (Character.BYTES * MAX_PATIENT_ID_LENGTH) + // patientId
-                (Character.BYTES * 26) + // testDateTime as ISO string
+                (Character.BYTES * MAX_DATE_TIME_LENGTH) + // testDateTime
                 1 + // result (boolean)
                 Double.BYTES + // testValue
                 Integer.BYTES + // noteLength
@@ -105,18 +157,18 @@ public class PcrTest implements IRecord<PcrTest>  {
         try {
             hlpOutStream.writeInt(testId);
 
-            hlpOutStream.writeInt(patientIdLenght);
+            hlpOutStream.writeInt(patientIdLength);
             hlpOutStream.writeChars(padString(patientId, MAX_PATIENT_ID_LENGTH));
 
             // Serialize LocalDateTime as ISO string
             String dateTimeStr = testDateTime.format(DATE_TIME_FORMATTER);
-            hlpOutStream.writeChars(padString(dateTimeStr, 26));
+            hlpOutStream.writeChars(dateTimeStr);
 
             hlpOutStream.writeBoolean(result);
 
             hlpOutStream.writeDouble(testValue);
 
-            hlpOutStream.writeInt(noteLenght);
+            hlpOutStream.writeInt(noteLength);
             hlpOutStream.writeChars(padString(note, MAX_NOTE_LENGTH));
         } catch (IOException e) {
             throw new IllegalStateException("Error during conversion to byte array.");
@@ -133,32 +185,39 @@ public class PcrTest implements IRecord<PcrTest>  {
         try {
             this.testId = hlpInStream.readInt();
 
-            this.patientIdLenght = hlpInStream.readInt();
+            this.patientIdLength = hlpInStream.readInt();
             this.patientId = "";
             for (int i = 0; i < MAX_PATIENT_ID_LENGTH; i++) {
-                if (i < patientIdLenght) {
+                if (i < patientIdLength) {
                     this.patientId += hlpInStream.readChar();
                 } else {
                     hlpInStream.readChar();
                 }
             }
 
-            // Deserialize LocalDateTime from ISO string
             String dateTimeStr = "";
-            for (int i = 0; i < 26; i++) {
+            for (int i = 0; i < MAX_DATE_TIME_LENGTH; i++) {
                 dateTimeStr += hlpInStream.readChar();
             }
             dateTimeStr = dateTimeStr.trim();
-            this.testDateTime = LocalDateTime.parse(dateTimeStr, DATE_TIME_FORMATTER);
+            try {
+                if (!dateTimeStr.isEmpty()) {
+                    this.testDateTime = LocalDateTime.parse(dateTimeStr, DATE_TIME_FORMATTER);
+                } else {
+                    this.testDateTime = LocalDateTime.of(1, 1, 1, 0, 0, 0);
+                }
+            } catch (Exception e) {
+                this.testDateTime = LocalDateTime.of(1, 1, 1, 0, 0, 0);
+            }
 
             this.result = hlpInStream.readBoolean();
 
             this.testValue = hlpInStream.readDouble();
 
-            this.noteLenght = hlpInStream.readInt();
+            this.noteLength = hlpInStream.readInt();
             this.note = "";
             for (int i = 0; i < MAX_NOTE_LENGTH; i++) {
-                if (i < noteLenght) {
+                if (i < noteLength) {
                     this.note += hlpInStream.readChar();
                 } else {
                     hlpInStream.readChar();

@@ -10,10 +10,9 @@ public class HashFileSimpleTest {
 
     public static void main(String[] args) {
 
-
         // Testovacie údaje
-        PcrTest[] tests = new PcrTest[500];
-        for (int i = 0; i < 500; i++) {
+        PcrTest[] tests = new PcrTest[100000];
+        for (int i = 0; i < 100000; i++) {
             tests[i] = new PcrTest(
                     i, // testId
                     "PAT" + String.format("%03d", i), // patientId
@@ -34,34 +33,43 @@ public class HashFileSimpleTest {
         }
 
         System.out.println("=== TEST VKLADANIA PCR TESTOV ===");
-        // Vloženie všetkých 10 záznamov
-        for (int i = 0; i < 500; i++) {
+        // Vloženie záznamov
+        for (int i = 0; i < 10; i++) {
             int blockIndex = hashFile.insert(tests[i]);
             System.out.println("Test " + i + " vložený do bloku: " + blockIndex);
         }
-
-//        System.out.println("Test " + 10 + " vložený do bloku: " + hashFile.insert(new PcrTest(10,"",LocalDateTime.now(), true, 0.0, "")));
-//        System.out.println("Test " + 11 + " vložený do bloku: " + hashFile.insert(new PcrTest(11,"",LocalDateTime.now(), true, 0.0, "")));
-//        System.out.println("Test " + 12 + " vložený do bloku: " + hashFile.insert(new PcrTest(12,"",LocalDateTime.now(), true, 0.0, "")));
-//        System.out.println("Test " + 15 + " vložený do bloku: " + hashFile.insert(new PcrTest(15,"",LocalDateTime.now(), true, 0.0, "")));
-//        System.out.println("Test " + 17 + " vložený do bloku: " + hashFile.insert(new PcrTest(17,"",LocalDateTime.now(), true, 0.0, "")));
 
         // Výpis celej hash tabuľky
         System.out.println("\n=== VÝPIS HASH TABUĽKY PO VKLADANÍ ===");
         hashFile.printAllBlocks();
 
+
+        boolean error = false;
         System.out.println("\n=== TEST VYHĽADÁVANIA ===");
         // Vyhľadávanie niektorých záznamov
-        for (int i = 0; i < 500; i += 1) { // každý párny test
+        for (int i = 0; i < 10; i += 1) { // každý párny test
             PcrTest searchTest = new PcrTest(i, "", LocalDateTime.now(), false, 0.0, "");
             PcrTest found = hashFile.get(searchTest);
             if (found != null) {
                 System.out.println("Nájdený test " + i + ": " + found);
             } else {
-                System.out.println("Test " + i + " NEBOL nájdený!");
+                error = true;
+                System.out.println("--------------------Test " + i + " NEBOL nájdený!");
             }
         }
+        System.out.println("Error " +  error + "\n");
 
+        PcrTest editedTest1 = new PcrTest(1, "1", LocalDateTime.now(), true, 11.11, "11");
+        System.out.println("Edit patient 1: " + hashFile.edit(editedTest1));
+        PcrTest editedTest9 = new PcrTest(9, "1", LocalDateTime.now(), true, 11.11, "11");
+        System.out.println("Edit patient 9: " + hashFile.edit(editedTest9));
+        PcrTest editedTest10 = new PcrTest(10, "1", LocalDateTime.now(), true, 11.11, "11");
+        System.out.println("Edit patient 10: " + hashFile.edit(editedTest10));
+
+        // Výpis celej hash tabuľky
+        System.out.println("\n=== VÝPIS HASH TABUĽKY PO VKLADANÍ ===");
+        hashFile.printAllBlocks();
+/*
         System.out.println("\n=== TEST MAZANIA ===");
         // Zmazanie niektorých záznamov
         boolean deleted3 = hashFile.delete(tests[3]);
@@ -128,6 +136,7 @@ public class HashFileSimpleTest {
         } catch (IOException e) {
             System.out.println("Error reloading hash file: " + e.getMessage());
         }
+         */
         System.out.println("\nTest dokončený!");
     }
 }

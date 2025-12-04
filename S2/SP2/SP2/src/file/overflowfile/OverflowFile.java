@@ -5,7 +5,6 @@ import file.heapfile.HeapFile;
 
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
-import java.util.LinkedList;
 
 public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
 
@@ -14,27 +13,20 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         this.recordsPerBlock = (blockSize - 2 * Integer.BYTES) / recordSize; // validCount, nextBlock
     }
 
-    @Override
-    protected LinkedBlock<T> createNewBlock() {
-        return new LinkedBlock<>(recordsPerBlock, recordClass);
-    }
-
-    public int insertToFirst(T record) {
+    public int insertToStart(T record) {
 
         if (!emptyBlocks.isEmpty()) {
 
-            emptyBlocks.sort(Integer::compareTo);
-            int firstEmptyBlockIndex = emptyBlocks.getFirst();
-
+            int firstEmptyBlockIndex = emptyBlocks.findMin();
             LinkedBlock<T> emptyBlock = loadBlock(firstEmptyBlockIndex);
 
             if (emptyBlock != null && emptyBlock.addRecord(record)) {
                 saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
 
-                emptyBlocks.removeFirst();
+                emptyBlocks.remove(firstEmptyBlockIndex);
 
                 if (emptyBlock.isPartiallyEmpty()) {
-                    partiallyEmptyBlocks.add(firstEmptyBlockIndex);
+                    partiallyEmptyBlocks.insert(firstEmptyBlockIndex);
                 }
 
                 return firstEmptyBlockIndex;
@@ -51,7 +43,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
 
             // Aktualizujeme zoznamy
             if (!newBlock.isFull()) {
-                partiallyEmptyBlocks.add(newBlockIndex);
+                partiallyEmptyBlocks.insert(newBlockIndex);
             }
 
             return newBlockIndex;
@@ -60,9 +52,9 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         return -1; // error
     }
 
-    public boolean insertToChain(int firstBlockIndex, T record) {
-        if (firstBlockIndex < blockCount) {
-            int currentBlockIndex = firstBlockIndex;
+    public boolean insertToChain(int startBlockIndex, T record) {
+        if (startBlockIndex < blockCount) {
+            int currentBlockIndex = startBlockIndex;
             int previousBlockIndex = -1;
 
             while (currentBlockIndex != -1) {
@@ -92,39 +84,137 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         }
     }
 
-    public int getCapacity() {
-        return (this.blockCount - emptyBlocks.size()) * this.recordsPerBlock;
+    @Override
+    public T get(int startBlockIndex, T record) {
+        int currentBlockIndex = startBlockIndex;
+
+        while (currentBlockIndex != -1) {
+            LinkedBlock<T> block = loadBlock(currentBlockIndex);
+            if (block == null) {
+                return null;
+            }
+
+            T foundRecord = block.getRecord(record);
+            if (foundRecord != null) {
+                return foundRecord;
+            }
+
+            currentBlockIndex = block.getNextBlock();
+        }
+
+        return null;
     }
 
+    @Override
+    public boolean delete(int startBlockIndex, T record) {
+        int currentBlockIndex = startBlockIndex;
+        boolean recordDeleted = false;
+
+        while (currentBlockIndex != -1) {
+            LinkedBlock<T> block = loadBlock(currentBlockIndex);
+            if (block == null) {
+                break;
+            }
+
+            boolean wasFull = block.isFull();
+
+            if (block.removeRecord(record)) {
+                recordDeleted = true;
+                saveBlockToFile(currentBlockIndex, block);
+
+                updateBlockListsAfterDelete(currentBlockIndex, block, wasFull);
+            }
+
+            currentBlockIndex = block.getNextBlock();
+        }
+
+        //no truncate
+        return recordDeleted;
+    }
+
+    public boolean edit(int startBlockIndex, T editedRecord) {
+        int currentBlockIndex = startBlockIndex;
+        boolean edited = false;
+
+        while (currentBlockIndex != -1) {
+            LinkedBlock<T> block = loadBlock(currentBlockIndex);
+            if (block == null) {
+                break;
+            }
+
+            if (block.editRecord(editedRecord)) {
+                edited = true;
+                saveBlockToFile(currentBlockIndex, block);
+            }
+
+            currentBlockIndex = block.getNextBlock();
+        }
+
+        return edited;
+    }
+
+    public ArrayList<T> removeChain(int startBlockIndex) {
+        ArrayList<T> linkedRecords = new ArrayList<>();
+
+        if (startBlockIndex < 0 || startBlockIndex >= blockCount) {
+            return linkedRecords;
+        }
+
+        int currentBlockIndex = startBlockIndex;
+
+        while (currentBlockIndex != -1) {
+            LinkedBlock<T> currentBlock = loadBlock(currentBlockIndex);
+            if (currentBlock == null) {
+                break;
+            }
+
+            int nextBlockIndex = currentBlock.getNextBlock();
+            linkedRecords.addAll(currentBlock.clear());
+
+            saveBlockToFile(currentBlockIndex, currentBlock);
+            emptyBlocks.insert(currentBlockIndex);
+            partiallyEmptyBlocks.remove(Integer.valueOf(currentBlockIndex));
+
+            currentBlockIndex = nextBlockIndex;
+        }
+
+        //no truncate
+        return linkedRecords;
+    }
+
+    public int getCapacity() {
+        return (this.blockCount - emptyBlocks.getNodeCount()) * this.recordsPerBlock;
+    }
+
+    @Override
+    protected LinkedBlock<T> createNewBlock() {
+        return new LinkedBlock<>(recordsPerBlock, recordClass);
+    }
 
     private int createNewBlockInChain(T record, int lastBlockIndex) {
 
         if (!emptyBlocks.isEmpty()) {
-            emptyBlocks.sort(Integer::compareTo);
-            int firstEmptyBlockIndex = emptyBlocks.getFirst();
+            int firstEmptyBlockIndex = emptyBlocks.findMin();
 
             LinkedBlock<T> emptyBlock = loadBlock(firstEmptyBlockIndex);
 
             if (emptyBlock != null && emptyBlock.addRecord(record)) {
 
-                // pre istotu zruš starý nextBlock (ak tam nejaký bol)
                 emptyBlock.setNextBlock(-1);
 
-                // prepoj predchádzajúci blok reťazca na tento blok
+                // new link
                 if (lastBlockIndex != -1) {
                     LinkedBlock<T> lastBlock = loadBlock(lastBlockIndex);
                     lastBlock.setNextBlock(firstEmptyBlockIndex);
                     saveBlockToFile(lastBlockIndex, lastBlock);
                 }
 
-                // ulož samotný nový blok
-                saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
 
-                // Aktualizuj zoznamy blokov
-                emptyBlocks.removeFirst();
+                saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
+                emptyBlocks.remove(firstEmptyBlockIndex);
 
                 if (emptyBlock.isPartiallyEmpty()) {
-                    partiallyEmptyBlocks.add(firstEmptyBlockIndex);
+                    partiallyEmptyBlocks.insert(firstEmptyBlockIndex);
                 }
 
                 return firstEmptyBlockIndex;
@@ -139,7 +229,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
             blockCount++;
 
             if (!newBlock.isFull()) {
-                partiallyEmptyBlocks.add(newBlockIndex);
+                partiallyEmptyBlocks.insert(newBlockIndex);
             }
 
             if (lastBlockIndex != -1) {
@@ -160,101 +250,23 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
     }
 
 
-    @Override
-    public T get(int blockIndex, T record) {
-        int currentBlockIndex = blockIndex;
-
-        while (currentBlockIndex != -1) {
-            LinkedBlock<T> block = loadBlock(currentBlockIndex);
-            if (block == null) {
-                return null;
-            }
-
-            T foundRecord = block.getRecord(record);
-            if (foundRecord != null) {
-                return foundRecord;
-            }
-
-            currentBlockIndex = block.getNextBlock();
-        }
-
-        return null;
-    }
-
-    @Override
-    public boolean delete(int blockIndex, T record) {
-        int currentBlockIndex = blockIndex;
-        boolean recordDeleted = false;
-
-        while (currentBlockIndex != -1) {
-            LinkedBlock<T> block = loadBlock(currentBlockIndex);
-            if (block == null) {
-                break;
-            }
-
-            boolean wasFull = block.isFull();
-
-            if (block.removeRecord(record)) {
-                recordDeleted = true;
-                saveBlockToFile(currentBlockIndex, block);
-
-                updateBlockListsAfterDelete(currentBlockIndex, block, wasFull);
-            }
-
-            currentBlockIndex = block.getNextBlock();
-        }
-        //no truncate
-
-        return recordDeleted;
-    }
-
-    public ArrayList<T> removeLinkedRecords(int startBlockIndex) {
-        ArrayList<T> linkedRecords = new ArrayList<>();
-
-        if (startBlockIndex < 0 || startBlockIndex >= blockCount) {
-            return linkedRecords;
-        }
-
-        int currentBlockIndex = startBlockIndex;
-
-        while (currentBlockIndex != -1) {
-            LinkedBlock<T> currentBlock = loadBlock(currentBlockIndex);
-            if (currentBlock == null) {
-                break;
-            }
-
-            int nextBlockIndex = currentBlock.getNextBlock();
-            linkedRecords.addAll(currentBlock.clear());
-
-            saveBlockToFile(currentBlockIndex, currentBlock);
-            emptyBlocks.add(currentBlockIndex);
-            partiallyEmptyBlocks.remove(Integer.valueOf(currentBlockIndex));
-
-            currentBlockIndex = nextBlockIndex;
-        }
-
-        //truncateEmptyBlocksAtEnd();
-        return linkedRecords;
-    }
 
     private void updateBlockLists(int blockIndex, LinkedBlock<T> block) {
         emptyBlocks.remove(Integer.valueOf(blockIndex));
 
         if (block.isFull()) {
             partiallyEmptyBlocks.remove(Integer.valueOf(blockIndex));
-        } else if (!partiallyEmptyBlocks.contains(blockIndex)) {
-            partiallyEmptyBlocks.add(blockIndex);
+        } else {
+            partiallyEmptyBlocks.insert(blockIndex);
         }
     }
 
     private void updateBlockListsAfterDelete(int blockIndex, LinkedBlock<T> block, boolean wasFull) {
         if (block.isEmpty()) {
             partiallyEmptyBlocks.remove(Integer.valueOf(blockIndex));
-            emptyBlocks.add(blockIndex);
+            emptyBlocks.insert(blockIndex);
         } else if (wasFull && block.isPartiallyEmpty()) {
-            if (!partiallyEmptyBlocks.contains(blockIndex)) {
-                partiallyEmptyBlocks.add(blockIndex);
-            }
+            partiallyEmptyBlocks.insert(blockIndex);
         }
     }
 

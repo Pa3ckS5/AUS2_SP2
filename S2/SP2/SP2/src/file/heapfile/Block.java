@@ -52,6 +52,19 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         return false;
     }
 
+    public boolean editRecord(T editedRecord) {
+        if (!isEmpty()) {
+            for (int i = 0; i < validCount; i++) {
+                T current = records.get(i);
+                if (current != null && current.isEqualTo(editedRecord)) {
+                    records.set(i, editedRecord);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public T getRecord(int index) {
         if (index < 0 || index >= validCount) {
             return null;
