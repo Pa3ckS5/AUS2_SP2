@@ -4,6 +4,7 @@ import whoApp.data.Patient;
 import file.heapfile.HeapFile;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.LinkedList;
 import java.util.Random;
@@ -12,6 +13,7 @@ public class HeapFileTester {
 
     public void testMethods(boolean initialFilling) {
         String fileName = "test_patients";
+        int blockSize = 1024;
 
         int repsNum = 100;
         int methodCallsNum = 1000;
@@ -25,15 +27,18 @@ public class HeapFileTester {
         HeapFile<Patient> heapFile = null;
 
         try {
-            heapFile = new HeapFile<>(fileName, 512, Patient.class);
+            heapFile = new HeapFile<>(fileName, blockSize, Patient.class);
         } catch (FileNotFoundException e) {
             System.out.println("File not found");
             return;
+        } catch (IOException e) {
+            System.out.println("Error create heap file");
         }
 
         int numEquals = 0;
         int numNotEquals = 0;
         int patientsCount = 0;
+        boolean error = false;
 
         if (initialFilling) {
             generateRandomPatients(initialElementsNum, heapFile, linkedList);
@@ -69,6 +74,7 @@ public class HeapFileTester {
 
                         if (!removedFromHeap) {
                             System.out.println("WARNING: Failed to remove patient from heap file: " + pairToRemove.getPatient());
+                            error = true;
                         }
                     }
 
@@ -79,7 +85,7 @@ public class HeapFileTester {
                         PatientBlockPair pairToFind = linkedList.get(findIndex);
 
                         boolean found = false;
-                        int recordsPerBlock = 512 / (new Patient().getSize()); // Calculate based on block size
+                        int recordsPerBlock = blockSize / (new Patient().getSize()); // Calculate based on block size
 
                         Patient foundPatient = heapFile.get(pairToFind.getBlock(), pairToFind.getPatient());
                         if (foundPatient != null && foundPatient.isEqualTo(pairToFind.getPatient())) {
@@ -88,12 +94,17 @@ public class HeapFileTester {
 
                         if (!found) {
                             System.out.println("WARNING: Patient not found in block " + pairToFind.getBlock() + ": " + pairToFind.getPatient());
+                            error = true;
                         }
                     }
                 }
             }
 
             boolean equals = verifyAllRecords(heapFile, linkedList);
+            if(heapFile.isLastBlockEmpty()) {
+                System.out.println("Error: last block is empty !");
+                error = true;
+            }
 
             if (equals) {
                 numEquals++;
@@ -104,7 +115,7 @@ public class HeapFileTester {
             }
         }
 
-        // Final verification
+        // final verification
         System.out.println("\n=== FINAL VERIFICATION ===");
         boolean finalEquals = verifyAllRecords(heapFile, linkedList);
         if (finalEquals) {
@@ -117,7 +128,9 @@ public class HeapFileTester {
 
         heapFile.close();
 
-        System.out.println(String.format("\nSummary: %d/%d passed", numEquals, numEquals + numNotEquals));
+        //System.out.println(String.format("\nSummary: %d/%d passed\n", numEquals, numEquals + numNotEquals));
+        System.out.println("\nSummary: " + numEquals + "/" + (numEquals + numNotEquals) +  " passed");
+        System.out.println("Error: " + error + "\n");
 
         deleteTestFiles(fileName);
     }

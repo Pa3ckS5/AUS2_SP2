@@ -33,9 +33,9 @@ public class HashFileTester {
         HashFile<PcrTest> hashFile = null;
 
         try {
-            hashFile = new HashFile<>(fileName, 512, 256, PcrTest.class);
+            hashFile = new HashFile<>(fileName, 1024, 512, PcrTest.class); //512 256
         } catch (IOException e) {
-            System.out.println("File not found or error creating hash file");
+            System.out.println("Error creating hash file");
             return;
         }
 
@@ -160,7 +160,7 @@ public class HashFileTester {
 
         hashFile.close();
 
-        System.out.println(String.format("\nSummary: %d/%d passed", numEquals, numEquals + numNotEquals));
+        System.out.println("\nSummary: " + numEquals + "/" + (numEquals + numNotEquals) +  " passed");
 
         deleteTestFiles(fileName);
     }

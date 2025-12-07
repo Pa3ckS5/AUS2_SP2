@@ -20,8 +20,7 @@ public class LinkedBlock<T extends IRecord<T>> extends Block<T> {
     @Override
     public int getSize() {
         try {
-            // Veľkosť základnej triedy + nextBlock
-            return super.getSize() + Integer.BYTES;
+            return super.getSize() + Integer.BYTES; // nextBlock
         } catch (Exception e) {
             throw new RuntimeException("Error calculating block size", e);
         }

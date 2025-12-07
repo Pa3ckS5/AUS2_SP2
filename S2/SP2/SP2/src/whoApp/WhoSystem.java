@@ -7,6 +7,7 @@ import whoApp.data.PcrTest;
 import java.io.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Random;
 
 public class WhoSystem {
@@ -93,31 +94,30 @@ public class WhoSystem {
     }
 
     public boolean insertPcrTest(PcrTest pcrTest) {
-        // 1. Najprv nájdi pacienta
+        // find patient
         String patientId = pcrTest.getPatientId();
         Patient patient = findPatient(patientId);
 
-        // 2. Ak pacient neexistuje, test nemôžeme priradiť
         if (patient == null) {
             System.out.println("Patient with ID " + patientId + " not found. Test not inserted.");
             return false;
         }
 
-        // 3. Priraď test pacientovi
+        // test for patient
         boolean assignedToPatient = patient.insertTest(pcrTest);
         if (!assignedToPatient) {
             System.out.println("Patient " + patientId + " has reached maximum test limit. Test not inserted.");
             return false;
         }
 
-        // 4. Aktualizuj pacienta v databáze
+        // update patient
         boolean patientUpdated = editPatient(patient);
         if (!patientUpdated) {
             System.out.println("Failed to update patient " + patientId + " with new test.");
             return false;
         }
 
-        // 5. Vlož test do databázy PCR testov
+        // test insert
         if (pcrTests.insert(pcrTest) >= 0) {
             nextPcrTestId++;
             return true;
@@ -154,11 +154,36 @@ public class WhoSystem {
 
     public boolean removePcrTest(int id) {
         PcrTest t = new PcrTest(id);
-        return pcrTests.delete(t);
+        boolean removed = pcrTests.delete(t);
+
+        if (removed) {
+            // remove test from patient
+            PcrTest test = findPcrTest(id);
+            if (test != null) {
+                String patientId = test.getPatientId();
+                Patient patient = findPatient(patientId);
+                if (patient != null) {
+                    patient.removeTest(test);
+                    editPatient(patient);
+                }
+            }
+        }
+
+        return removed;
     }
 
     public boolean removePatient(String id) {
         Patient p = new Patient(id);
+        // remove all tests
+        Patient patient = findPatient(id);
+        if (patient != null) {
+            ArrayList<Integer> tests = patient.getTests();
+            for (Integer testId : tests) {
+                PcrTest test = new PcrTest(testId);
+                removePcrTest(test.getTestId());
+            }
+        }
+
         return patients.delete(p);
     }
 
@@ -170,8 +195,52 @@ public class WhoSystem {
         return pcrTests.edit(pcrTest);
     }
 
-    public String getBlocksForPrint() {
-        return patients.toString();
+    public boolean editPcrTest(PcrTest pcrTest, String oldPatientId) {
+        String newPatientId = pcrTest.getPatientId();
+
+        // no patient ID change
+        if (newPatientId.equals(oldPatientId)) {
+            return pcrTests.edit(pcrTest);
+        }
+
+        // patient ID change
+        Patient oldPatient = findPatient(oldPatientId);
+        if (oldPatient == null) {
+            return false;
+        }
+
+        Patient newPatient = findPatient(newPatientId);
+        if (newPatient == null) {
+            return false;
+        }
+
+        if (!newPatient.insertTest(pcrTest)) {
+            return false; // test limit
+        }
+
+        oldPatient.removeTest(pcrTest);
+
+        // update patients
+        if (!editPatient(oldPatient) || !editPatient(newPatient)) {
+            return false; // Failed to update patients
+        }
+
+        // update test
+        return pcrTests.edit(pcrTest);
+    }
+
+    public boolean canTransferTest(int testId, String oldPatientId, String newPatientId) {
+        Patient newPatient = findPatient(newPatientId);
+        if (newPatient == null) {
+            return false;
+        }
+
+        PcrTest test = findPcrTest(testId);
+        if (test == null) {
+            return false;
+        }
+
+        return newPatient.getTests().size() < 8;
     }
 
     public boolean saveMetadata(String systemName) {
@@ -227,19 +296,28 @@ public class WhoSystem {
     }
 
     public int getPatientCount() {
-        return nextPatientId;
+        return patients.getRecordCount();
     }
 
     public int getTestCount() {
+        return pcrTests.getRecordCount();
+    }
+
+    public int getNextPatientId() {
+        return nextPatientId;
+    }
+
+    public int getNextPcrTestId() {
         return nextPcrTestId;
     }
 
     public String getHashFilesAsString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("Next patient id: " + nextPatientId + ", Next test id: " + nextPcrTestId);
+        sb.append("Next available patient ID: " + nextPatientId + ", Next available test ID: " + nextPcrTestId);
+        sb.append("\nActual count - Patients: " + getPatientCount() + ", Tests: " + getTestCount() + "\n");
 
         sb.append("\n\n#################### PATIENTS HASH FILE ####################\n\n");
-        sb.append("Total Patients: ").append(nextPatientId).append("\n");
+        sb.append("Total Patients: ").append(getPatientCount()).append("\n");
         if (patients != null) {
             sb.append(patients.toString());
         } else {
@@ -247,7 +325,7 @@ public class WhoSystem {
         }
 
         sb.append("\n\n#################### PCR TESTS HASH FILE ####################\n\n");
-        sb.append("Total Tests: ").append(nextPcrTestId).append("\n");
+        sb.append("Total Tests: ").append(getTestCount()).append("\n");
         if (pcrTests != null) {
             sb.append(pcrTests.toString());
         } else {

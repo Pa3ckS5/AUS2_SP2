@@ -10,8 +10,8 @@ public class Patient implements IRecord<Patient> {
     private String lastName;
     private LocalDate birthDate;
     private String patientId;
-    private ArrayList<PcrTest> tests;
-    private static final int MAX_TESTS = 8;
+    private ArrayList<Integer> testIds; // Zmenené na ID testov
+    private static final int MAX_TESTS = 6;
 
     private static final int MAX_FIRST_NAME_LENGTH = 15;
     private static final int MAX_LAST_NAME_LENGTH = 14;
@@ -21,6 +21,7 @@ public class Patient implements IRecord<Patient> {
     private int firstNameLength;
     private int lastNameLength;
     private int patientIdLength;
+    private int testCount;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
@@ -29,7 +30,8 @@ public class Patient implements IRecord<Patient> {
         setLastName(lastName);
         this.birthDate = birthDate;
         setPatientId(patientId);
-        tests = new ArrayList<>();
+        testIds = new ArrayList<>();
+        testCount = 0;
     }
 
     public Patient() {
@@ -45,21 +47,37 @@ public class Patient implements IRecord<Patient> {
         setLastName(patient.getLastName());
         this.birthDate = patient.getBirthDate();
         setPatientId(patient.getPatientId());
-        tests = patient.getTests();
+        this.testIds = new ArrayList<>(patient.getTestIds());
+        this.testCount = patient.testCount;
     }
 
     public boolean insertTest(PcrTest test) {
-        if (tests.size() < MAX_TESTS) {
-            tests.add(test);
+        if (testIds.size() < MAX_TESTS) {
+            testIds.add(test.getTestId());
+            testCount = testIds.size();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean insertTestId(int testId) {
+        if (testIds.size() < MAX_TESTS) {
+            testIds.add(testId);
+            testCount = testIds.size();
             return true;
         }
         return false;
     }
 
     public boolean removeTest(PcrTest test) {
-        for (int i = 0; i < tests.size(); i++) {
-            if (tests.get(i).equals(test)) {
-                tests.remove(i);
+        return removeTestId(test.getTestId());
+    }
+
+    public boolean removeTestId(int testId) {
+        for (int i = 0; i < testIds.size(); i++) {
+            if (testIds.get(i) == testId) {
+                testIds.remove(i);
+                testCount = testIds.size();
                 return true;
             }
         }
@@ -90,14 +108,26 @@ public class Patient implements IRecord<Patient> {
     public LocalDate getBirthDate() { return birthDate; }
     public String getPatientId() { return patientId; }
 
-    public ArrayList<PcrTest> getTests() {
-        return tests;
+    public ArrayList<Integer> getTestIds() {
+        return new ArrayList<>(testIds);
+    }
+
+    public int getTestCount() {
+        return testCount;
+    }
+
+    // Pre spätnú kompatibilitu - vráti prázdny zoznam
+    public ArrayList<Integer> getTests() {
+        return testIds;
     }
 
     @Override
     public int getSize() {
-        // lengths + strings
-        return Integer.BYTES * 3 + Character.BYTES * (MAX_FIRST_NAME_LENGTH + MAX_LAST_NAME_LENGTH + MAX_BIRTH_DATE_LENGTH + MAX_PATIENT_ID_LENGTH);
+        // lengths + strings + testCount + MAX_TESTS * Integer (pre test IDs)
+        return Integer.BYTES * 4 + // firstNameLength, lastNameLength, patientIdLength, testCount
+                Character.BYTES * (MAX_FIRST_NAME_LENGTH + MAX_LAST_NAME_LENGTH +
+                        MAX_BIRTH_DATE_LENGTH + MAX_PATIENT_ID_LENGTH) +
+                Integer.BYTES * MAX_TESTS; // Pre test IDs
     }
 
     @Override
@@ -106,16 +136,28 @@ public class Patient implements IRecord<Patient> {
         DataOutputStream hlpOutStream = new DataOutputStream(hlpByteArrayOutputStream);
 
         try {
+            // Personal information
             hlpOutStream.writeInt(firstNameLength);
             hlpOutStream.writeChars(padString(firstName, MAX_FIRST_NAME_LENGTH));
 
             hlpOutStream.writeInt(lastNameLength);
             hlpOutStream.writeChars(padString(lastName, MAX_LAST_NAME_LENGTH));
 
-            hlpOutStream.writeChars(birthDate.format(DATE_FORMATTER));
+            hlpOutStream.writeChars(padString(birthDate.format(DATE_FORMATTER), MAX_BIRTH_DATE_LENGTH));
 
             hlpOutStream.writeInt(patientIdLength);
             hlpOutStream.writeChars(padString(patientId, MAX_PATIENT_ID_LENGTH));
+
+            // Test information
+            hlpOutStream.writeInt(testCount);
+            for (int i = 0; i < MAX_TESTS; i++) {
+                if (i < testIds.size()) {
+                    hlpOutStream.writeInt(testIds.get(i));
+                } else {
+                    hlpOutStream.writeInt(-1); // Prázdne miesto
+                }
+            }
+
         } catch (IOException e) {
             throw new IllegalStateException("Error during conversion to byte array.");
         }
@@ -129,6 +171,7 @@ public class Patient implements IRecord<Patient> {
         DataInputStream hlpInStream = new DataInputStream(hlpByteArrayInputStream);
 
         try {
+            // Personal information
             this.firstNameLength = hlpInStream.readInt();
             this.firstName = "";
             for (int i = 0; i < MAX_FIRST_NAME_LENGTH; i++) {
@@ -175,6 +218,16 @@ public class Patient implements IRecord<Patient> {
                 }
             }
 
+            // Test information
+            this.testCount = hlpInStream.readInt();
+            this.testIds = new ArrayList<>();
+            for (int i = 0; i < MAX_TESTS; i++) {
+                int testId = hlpInStream.readInt();
+                if (testId != -1 && i < testCount) {
+                    testIds.add(testId);
+                }
+            }
+
         } catch (IOException e) {
             throw new IllegalStateException("Error during conversion from byte array.");
         }
@@ -198,10 +251,14 @@ public class Patient implements IRecord<Patient> {
         sb.append(String.format("%s %s (%s) %s", getFirstName(), getLastName(), getPatientId(), birthDate));
 
         sb.append(" [");
-        for (PcrTest test : tests) {
-            sb.append(test.getTestId()).append(" ");
+        for (int i = 0; i < testIds.size(); i++) {
+            sb.append(testIds.get(i));
+            if (i < testIds.size() - 1) {
+                sb.append(", ");
+            }
         }
         sb.append("]");
+
 
         return sb.toString();
     }

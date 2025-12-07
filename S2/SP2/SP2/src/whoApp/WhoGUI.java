@@ -280,7 +280,7 @@ public class WhoGUI extends JFrame {
         }
 
         // Test ID is assigned by the system automatically
-        int testId = system.getTestCount();
+        int testId = system.getNextPcrTestId();
         JLabel testIdLabel = new JLabel("Test ID (auto-assigned): " + testId);
         JTextField patientIdField = new JTextField();
         JTextField dateField = new JTextField(LocalDateTime.now().format(DATE_TIME_FORMATTER));
@@ -323,7 +323,7 @@ public class WhoGUI extends JFrame {
         }
     }
 
-    // 2. Find Patient with tests
+    // 2. Find Patient with tests (UPDATED - simplified display)
     private void findPatient() {
         if (system == null) {
             JOptionPane.showMessageDialog(this, "No system loaded!", "Error", JOptionPane.ERROR_MESSAGE);
@@ -337,21 +337,15 @@ public class WhoGUI extends JFrame {
             Patient patient = system.findPatient(patientId);
 
             if (patient != null) {
-                StringBuilder sb = new StringBuilder();
-                sb.append("=== PATIENT FOUND ===\n");
-                sb.append("ID: ").append(patient.getPatientId()).append("\n");
-                sb.append("Name: ").append(patient.getFirstName()).append(" ").append(patient.getLastName()).append("\n");
-                sb.append("Birth Date: ").append(patient.getBirthDate()).append("\n");
-                sb.append("=====================\n\n");
-
-                outputArea.append(sb.toString());
+                outputArea.append("✓ Patient found:\n");
+                outputArea.append(patient.toString() + "\n\n");
             } else {
                 outputArea.append("✗ Patient with ID '" + patientId + "' not found.\n\n");
             }
         }
     }
 
-    // 3. Find PCR Test with patient info
+    // 3. Find PCR Test with patient info (UPDATED)
     private void findPCRTest() {
         if (system == null) {
             JOptionPane.showMessageDialog(this, "No system loaded!", "Error", JOptionPane.ERROR_MESSAGE);
@@ -366,17 +360,22 @@ public class WhoGUI extends JFrame {
                 PcrTest test = system.findPcrTest(testId);
 
                 if (test != null) {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("=== PCR TEST FOUND ===\n");
-                    sb.append("Test ID: ").append(test.getTestId()).append("\n");
-                    sb.append("Patient ID: ").append(test.getPatientId()).append("\n");
-                    sb.append("Date/Time: ").append(test.getTestDateTime()).append("\n");
-                    sb.append("Result: ").append(test.getResult() ? "Positive" : "Negative").append("\n");
-                    sb.append("Value: ").append(String.format("%.2f", test.getTestValue())).append("\n");
-                    sb.append("Note: ").append(test.getNote()).append("\n");
-                    sb.append("======================\n\n");
 
-                    outputArea.append(sb.toString());
+                    outputArea.append("✓ PCR Test found:\n");
+                    outputArea.append(test.toString() + "\n");
+
+                    String patientId = test.getPatientId();
+                    if (patientId != null && !patientId.trim().isEmpty()) {
+                        Patient patient = system.findPatient(patientId);
+                        if (patient != null) {
+                            outputArea.append("Patient: ");
+                            outputArea.append(patient.toString() + "\n\n");
+                        } else {
+                            outputArea.append("⚠ Associated patient with ID '" + patientId + "' not found.\n\n");
+                        }
+                    } else {
+                        outputArea.append("⚠ Test has no patient ID assigned.\n\n");
+                    }
                 } else {
                     outputArea.append("✗ PCR Test with ID " + testId + " not found.\n\n");
                 }
@@ -395,7 +394,7 @@ public class WhoGUI extends JFrame {
         }
 
         // Patient ID is assigned by the system automatically
-        int patientIdNum = system.getPatientCount();
+        int patientIdNum = system.getNextPatientId();
         String patientId = String.valueOf(patientIdNum);
         JLabel patientIdLabel = new JLabel("Patient ID (auto-assigned): " + patientId);
         JTextField firstNameField = new JTextField("John");
@@ -524,9 +523,7 @@ public class WhoGUI extends JFrame {
                     try {
                         patient.setFirstName(firstNameField.getText());
                         patient.setLastName(lastNameField.getText());
-
-                        // Note: You need to add setBirthDate method to Patient class
-                        // patient.setBirthDate(LocalDate.parse(birthDateField.getText(), DATE_FORMATTER));
+                        patient.setBirthDate(LocalDate.parse(birthDateField.getText(), DATE_FORMATTER));
 
                         if (system.editPatient(patient)) {
                             outputArea.append("✓ Patient " + patientId + " updated successfully.\n\n");
@@ -545,7 +542,7 @@ public class WhoGUI extends JFrame {
         }
     }
 
-    // 8. Edit PCR Test
+    // 8. Edit PCR Test (UPDATED)
     private void editPCRTest() {
         if (system == null) {
             JOptionPane.showMessageDialog(this, "No system loaded!", "Error", JOptionPane.ERROR_MESSAGE);
@@ -560,7 +557,8 @@ public class WhoGUI extends JFrame {
                 PcrTest test = system.findPcrTest(testId);
 
                 if (test != null) {
-                    JTextField patientIdField = new JTextField(test.getPatientId());
+                    String oldPatientId = test.getPatientId();
+                    JTextField patientIdField = new JTextField(oldPatientId);
                     JTextField dateField = new JTextField(test.getTestDateTime().format(DATE_TIME_FORMATTER));
                     JComboBox<String> resultCombo = new JComboBox<>(new String[]{"Positive", "Negative"});
                     resultCombo.setSelectedIndex(test.getResult() ? 0 : 1);
@@ -580,19 +578,34 @@ public class WhoGUI extends JFrame {
 
                     if (option == JOptionPane.OK_OPTION) {
                         try {
-                            test.setPatientId(patientIdField.getText());
+                            String newPatientId = patientIdField.getText().trim();
 
-                            // Note: You need to add setTestDateTime method to PcrTest class
-                            // test.setTestDateTime(LocalDateTime.parse(dateField.getText(), DATE_TIME_FORMATTER));
+                            // UPDATED: Check if patient ID changed
+                            if (!newPatientId.equals(oldPatientId)) {
+                                // Check if new patient exists and can accept the test
+                                boolean canTransfer = system.canTransferTest(testId, oldPatientId, newPatientId);
+                                if (!canTransfer) {
+                                    outputArea.append("✗ Cannot transfer test #" + testId + " to patient " + newPatientId +
+                                            ". Patient doesn't exist or has reached test limit.\n\n");
+                                    return;
+                                }
+                            }
 
+                            // Apply other changes
+                            test.setPatientId(newPatientId);
                             test.setNote(noteField.getText());
+                            test.setTestDateTime(LocalDateTime.parse(dateField.getText(), DATE_TIME_FORMATTER));
+                            test.setResult(resultCombo.getSelectedIndex() == 0);
+                            test.setTestValue(Double.parseDouble(valueField.getText()));
 
-                            // Note: You need to add setResult and setTestValue methods to PcrTest class
-                            // test.setResult(resultCombo.getSelectedIndex() == 0);
-                            // test.setTestValue(Double.parseDouble(valueField.getText()));
-
-                            if (system.editPcrTest(test)) {
-                                outputArea.append("✓ PCR Test #" + testId + " updated successfully.\n\n");
+                            if (system.editPcrTest(test, oldPatientId)) {
+                                outputArea.append("✓ PCR Test #" + testId + " updated successfully.\n");
+                                if (!newPatientId.equals(oldPatientId)) {
+                                    outputArea.append("  Test transferred from patient " + oldPatientId +
+                                            " to patient " + newPatientId + "\n\n");
+                                } else {
+                                    outputArea.append("\n");
+                                }
                             } else {
                                 outputArea.append("✗ Failed to update PCR Test #" + testId + "\n\n");
                             }

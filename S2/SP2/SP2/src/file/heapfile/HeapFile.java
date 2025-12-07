@@ -37,6 +37,10 @@ public class HeapFile<T extends IRecord<T>> {
             throw new RuntimeException("Error creating record instance.", e);
         }
 
+        if (recordSize > blockSize) {
+            throw new RuntimeException("Record size is larger than block size.");
+        }
+
         try {
             this.file = new RandomAccessFile(fileName + ".dat", "rw");
         } catch (FileNotFoundException e) {
@@ -219,7 +223,7 @@ public class HeapFile<T extends IRecord<T>> {
     private void loadHeapFile() {
         File headerFile = new File(heapFileName);
         if (!headerFile.exists()) {
-            // Inicializácia pre nový súbor
+            // initialize
             this.blockCount = 0;
             return;
         }
@@ -348,7 +352,6 @@ public class HeapFile<T extends IRecord<T>> {
         sb.append("Partially empty blocks: ").append(partiallyEmptyBlocks.nodesToString()).append("\n");
         sb.append("Total blocks in file: ").append(getBlockCount()).append("\n\n");
 
-        // Prechod všetkými blokmi
         for (int i = 0; i < getBlockCount(); i++) {
             Block<T> block = loadBlock(i);
             if (block != null) {
@@ -364,5 +367,9 @@ public class HeapFile<T extends IRecord<T>> {
 
     public int getRecordsPerBlock() {
         return recordsPerBlock;
+    }
+
+    public boolean isLastBlockEmpty() {
+        return loadBlock(blockCount - 1).isEmpty();
     }
 }
