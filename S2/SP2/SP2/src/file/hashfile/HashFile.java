@@ -98,11 +98,11 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
             this.recordCount--;
 
             saveBlockToFile(index, block);
-            shakeChain(index);
+            shake(index);
 
-//            while (calculateDensity() < MIN_DENSITY && blockCount > INITIAL_BLOCK_COUNT) {
-//                merge();
-//            }
+            while (calculateDensity() < MIN_DENSITY && blockCount > INITIAL_BLOCK_COUNT) {
+                merge();
+            }
         }
 
         if (index == 21 || index == 6) {
@@ -321,7 +321,113 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
         //System.out.println("After split: " + simplePrint());
     }
 
-    private void shakeChain(int index) {
+    private boolean merge() {
+        if (blockCount > INITIAL_BLOCK_COUNT) {
+            splitPointer--;
+            if (splitPointer < 0) {
+                hashPower--;
+                splitPointer = getHashEdge() - 1;
+            }
+
+            //main blocks
+            HashBlock<T> lowerBlock = loadBlock(splitPointer);
+            HashBlock<T> higherBlock = loadBlock(blockCount - 1);
+
+            //overflow blocks
+            ArrayList<LinkedBlock<T>> lowerOverflowBlocks = overflowFile.getBlockChain(lowerBlock.getNextBlock());
+            ArrayList<LinkedBlock<T>> higherOverflowBlocks = overflowFile.getBlockChain(higherBlock.getNextBlock());
+
+            ArrayList<LinkedBlock<T>> allOverflowBlocks = new ArrayList<>();
+            int allOverflowHeadIndex = -1;
+
+            if (!lowerOverflowBlocks.isEmpty()) {
+                // head reťazca je pôvodný nextBlock z lowerBlock
+                allOverflowHeadIndex = lowerBlock.getNextBlock();
+                allOverflowBlocks.addAll(lowerOverflowBlocks);
+
+                if (!higherOverflowBlocks.isEmpty()) {
+                    // posledný blok z lowerOverflow teraz ukazuje na head reťazca z higherOverflow
+                    allOverflowBlocks
+                            .get(allOverflowBlocks.size() - 1)
+                            .setNextBlock(higherBlock.getNextBlock());
+                }
+            } else {
+                // lower nemal overflow, ak nejaký má higher, pripojíme ho k lower
+                if (!higherOverflowBlocks.isEmpty()) {
+                    allOverflowHeadIndex = higherBlock.getNextBlock();
+                    lowerBlock.setNextBlock(allOverflowHeadIndex);
+                }
+            }
+
+            allOverflowBlocks.addAll(higherOverflowBlocks);
+
+            //all records
+            ArrayList<T> allRecords = new ArrayList<>();
+            allRecords.addAll(lowerBlock.removeRecords());
+            allRecords.addAll(higherBlock.removeRecords());
+            for (LinkedBlock<T> ob : allOverflowBlocks) {
+                allRecords.addAll(ob.removeRecords());
+            }
+
+            int lastUsed = insertRecordsToChain(allRecords, lowerBlock, allOverflowBlocks);
+
+            ArrayList<LinkedBlock<T>> emptyOverflowBlocks = new ArrayList<>(); //unused blocks in old chain
+            int firstEmptyOverflowBlockIndex = -1;
+
+            if (lastUsed == -1) {
+                // lowerBlock po merge nepoužíva žiadne overflow bloky
+                lowerBlock.setNextBlock(-1);
+
+                // všetky existujúce overflow bloky sú voľné (ak vôbec nejaké sú)
+                if (!allOverflowBlocks.isEmpty() && allOverflowHeadIndex != -1) {
+                    firstEmptyOverflowBlockIndex = allOverflowHeadIndex;
+                    emptyOverflowBlocks.addAll(allOverflowBlocks);
+                }
+            } else {
+                ArrayList<LinkedBlock<T>> usedOverflowBlocks = new ArrayList<>();
+
+                //divide blocks
+                for (int i = 0; i < allOverflowBlocks.size(); i++) {
+                    if (i <= lastUsed) {
+                        usedOverflowBlocks.add(allOverflowBlocks.get(i));
+                    } else {
+                        emptyOverflowBlocks.add(allOverflowBlocks.get(i));
+                    }
+                }
+
+                if (!emptyOverflowBlocks.isEmpty()) {
+                    // head voľného reťazca je nextBlock posledného použitého bloku
+                    firstEmptyOverflowBlockIndex =
+                            usedOverflowBlocks.get(usedOverflowBlocks.size() - 1).getNextBlock();
+                }
+
+                // ustrihneme reťazec použitých blokov
+                usedOverflowBlocks.get(usedOverflowBlocks.size() - 1).setNextBlock(-1);
+
+                // zapíšeme nový overflow reťazec pre lowerBlock
+                overflowFile.editBlockChain(lowerBlock.getNextBlock(), usedOverflowBlocks);
+            }
+
+            //clear empty blocks
+            if (firstEmptyOverflowBlockIndex != -1 && !emptyOverflowBlocks.isEmpty()) {
+                ArrayList<Integer> emptyBlocksIndexes = new ArrayList<>();
+                emptyBlocksIndexes.add(firstEmptyOverflowBlockIndex);
+                for (int i = 0; i < emptyOverflowBlocks.size() - 1; i++) {
+                    emptyBlocksIndexes.add(emptyOverflowBlocks.get(i).getNextBlock());
+                }
+                overflowFile.addToEmptyBlocks(emptyBlocksIndexes);
+            }
+
+            saveBlockToFile(splitPointer, lowerBlock);
+            truncateLastBlock();
+
+            return true;
+        }
+        return false;
+    }
+
+
+    private void shake(int index) {
         HashBlock<T> block = loadBlock(index);
 
         boolean canShake = false;
@@ -389,6 +495,8 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
     }
 
     private int insertRecordsToChain(ArrayList<T> records, HashBlock<T> block, ArrayList<LinkedBlock<T>> overflowBlocks) {
+        block.setRecordCount(0);
+        block.setOverflowBlockCount(0);
         int r = 0;
 
         // main block
@@ -422,41 +530,6 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
         block.setOverflowBlockCount(lastUsed + 1); // 0, ak lastUsed == -1
 
         return lastUsed; // -1 => žiadne overflow bloky
-    }
-
-
-    private boolean merge() {
-        if (blockCount > INITIAL_BLOCK_COUNT) {
-            splitPointer--;
-            if (splitPointer < 0) {
-                hashPower--;
-                splitPointer = getHashEdge() - 1;
-            }
-
-            HashBlock<T> lastBlock = loadBlock(blockCount - 1);
-            HashBlock<T> bucketToRehash = loadBlock(splitPointer);
-
-            ArrayList<T> allRecords = new ArrayList<>();
-            allRecords.addAll(clearLinkedBlocks(lastBlock));
-            allRecords.addAll(clearLinkedBlocks(bucketToRehash));
-
-            for (T record : allRecords) {
-                int index = getHashIndex(record.hashCode());
-                HashBlock<T> targetBlock = loadBlock(index);
-                if (targetBlock == null) {
-                    System.out.println("Cant load block in index: " + index);
-                    targetBlock = createNewBlock();
-                }
-
-                insertIntoMainBlockOrOverflow(targetBlock, record);
-                saveBlockToFile(index, targetBlock);
-            }
-
-            truncateLastBlock();
-
-            return true;
-        }
-        return false;
     }
 
 
