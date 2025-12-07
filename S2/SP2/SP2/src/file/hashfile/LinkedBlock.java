@@ -1,7 +1,7 @@
-package file.overflowfile;
+package file.hashfile;
 
 import file.heapfile.Block;
-import file.IRecord;
+import whoApp.data.IRecord;
 import java.io.*;
 import java.util.ArrayList;
 

@@ -1,7 +1,7 @@
 package tests;
 
-import file.overflowfile.OverflowFile;
-import whoApp.Patient;
+import file.hashfile.OverflowFile;
+import whoApp.data.Patient;
 
 import java.io.FileNotFoundException;
 import java.time.LocalDate;

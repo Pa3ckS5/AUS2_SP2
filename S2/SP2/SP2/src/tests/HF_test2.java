@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedList;
 import java.util.Random;
 
-public class HashFileTester {
+public class HF_test2 {
 
     private int totalInsertTests = 0;
     private int failedInsertTests = 0;
@@ -20,7 +20,7 @@ public class HashFileTester {
     private int failedPlacementTests = 0;
 
     public void testMethods(boolean initialFilling) {
-        String fileName = "test_pcrtests";
+        String fileName = "test_pcrtests2";
         int repsNum = 100;
         int methodCallsNum = 100;
         int initialElementsNum = 100;
@@ -50,12 +50,19 @@ public class HashFileTester {
 
         boolean inserted213 = false;
 
+        //test 213 not exist in i3 j93
+        //test 213 not exist in i4 j23
         for (int i = 0; i < repsNum; i++) {
             System.out.println("Repetition " + (i + 1) + "/" + repsNum);
 
             for (int j = 0; j < methodCallsNum; j++) {
                 int methodProb = r.nextInt(100);
 
+                if(i==4 && j==22) {
+                    PcrTest test = new PcrTest(213);
+                    PcrTest found = hashFile.get(test);
+                    System.out.print("");
+                }
                 if (methodProb < 35) {
                     // INSERT
                     PcrTest test = new PcrTest(
@@ -66,6 +73,10 @@ public class HashFileTester {
                             r.nextDouble() * 100,
                             "Note " + testIdCounter
                     );
+
+                    if (testIdCounter == 198) { //213
+                        inserted213 = true;
+                    }
 
                     testIdCounter++;
 
@@ -88,12 +99,19 @@ public class HashFileTester {
                         int removeIndex = r.nextInt(linkedList.size());
                         PcrTest testToRemove = linkedList.get(removeIndex);
 
+                        if (testToRemove.getTestId() == 149) {
+                            System.out.println("");
+                        }
+
                         // Test before deletion
                         testFindOperation(hashFile, testToRemove, true);
 
                         // Perform deletion
                         boolean removedFromHash = hashFile.delete(testToRemove);
 
+                        if (!removedFromHash) {
+                            System.out.print("");
+                        }
                         // Test after deletion
                         if (removedFromHash) {
                             linkedList.remove(removeIndex);
@@ -118,9 +136,13 @@ public class HashFileTester {
                 }
 
                 if (inserted213) {
+                    System.out.println("");
                     PcrTest test = new PcrTest(213);
                     PcrTest found = hashFile.get(test);
                     boolean actuallyExists = (found != null && found.isEqualTo(test));
+                    if (!actuallyExists) {
+                        System.out.print("");
+                    }
                 }
             }
 
@@ -334,7 +356,7 @@ public class HashFileTester {
     }
 
     public static void main(String[] args) {
-        HashFileTester tester = new HashFileTester();
+        HF_test2 tester = new HF_test2();
         System.out.println("=== STARTING ENHANCED HASH FILE TEST WITH PCR TESTS ===");
         tester.testMethods(true);
     }

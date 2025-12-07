@@ -1,7 +1,7 @@
 package whoApp;
 
 import file.hashfile.HashFile;
-import file.heapfile.HeapFile;
+import whoApp.data.Patient;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;

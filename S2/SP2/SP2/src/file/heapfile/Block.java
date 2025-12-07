@@ -1,7 +1,7 @@
 package file.heapfile;
 
-import file.IBinarySerializable;
-import file.IRecord;
+import whoApp.data.IBinarySerializable;
+import whoApp.data.IRecord;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -36,7 +36,16 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         return false;
     }
 
-    public boolean removeRecord(T record) {
+    public int addRecords(ArrayList<T> addedRecords, int fromIndex) {
+        int r = fromIndex;
+        while (isPartiallyEmpty() && r < addedRecords.size()) {
+            addRecord(addedRecords.get(r));
+            r++;
+        }
+        return r - fromIndex;
+    }
+
+    public boolean deleteRecord(T record) {
         if (!isEmpty()) {
             for (int i = 0; i < validCount; i++) {
                 T current = records.get(i);
@@ -87,6 +96,12 @@ public class Block<T extends IRecord<T>> implements IBinarySerializable<Block<T>
         for (int i = 0; i < validCount; i++) {
             r.add(records.get(i));
         }
+        return r;
+    }
+
+    public ArrayList<T> removeRecords() {
+        ArrayList<T> r =  getRecords();
+        validCount = 0;
         return r;
     }
 

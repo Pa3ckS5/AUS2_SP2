@@ -1,12 +1,9 @@
-package whoApp;
-
-import file.IRecord;
+package whoApp.data;
 
 import java.io.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.List;
 
 public class Patient implements IRecord<Patient> {
     private String firstName;
@@ -197,8 +194,16 @@ public class Patient implements IRecord<Patient> {
 
     @Override
     public String toString() {
-        return String.format("%s %s (%s) %s",
-                getFirstName(), getLastName(), getPatientId(), birthDate);
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%s %s (%s) %s", getFirstName(), getLastName(), getPatientId(), birthDate));
+
+        sb.append(" [");
+        for (PcrTest test : tests) {
+            sb.append(test.getTestId()).append(" ");
+        }
+        sb.append("]");
+
+        return sb.toString();
     }
 
     @Override

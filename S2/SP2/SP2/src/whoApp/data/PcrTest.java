@@ -1,6 +1,4 @@
-package whoApp;
-
-import file.IRecord;
+package whoApp.data;
 
 import java.io.*;
 import java.time.LocalDateTime;

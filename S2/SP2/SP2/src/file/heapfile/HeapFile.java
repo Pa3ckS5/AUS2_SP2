@@ -1,6 +1,6 @@
 package file.heapfile;
 
-import file.IRecord;
+import whoApp.data.IRecord;
 import tree.bs.avl.AVLTree;
 
 import java.io.*;
@@ -64,7 +64,7 @@ public class HeapFile<T extends IRecord<T>> {
         if (!emptyBlocks.isEmpty()) {
             int blockIndex = emptyBlocks.findMin();
 
-            Block<T> block = loadBlock(blockIndex);
+            Block<T> block = createNewBlock();
             if (block.addRecord(record)) {
                 saveBlockToFile(blockIndex, block);
                 if (block.isPartiallyEmpty()) {
@@ -115,7 +115,7 @@ public class HeapFile<T extends IRecord<T>> {
         boolean wasFull = block.isFull();
 
         if (!block.isEmpty()) {
-            if (!block.removeRecord(record)) {
+            if (!block.deleteRecord(record)) {
                 return false;
             }
 

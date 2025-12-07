@@ -1,8 +1,7 @@
 package file.hashfile;
 
 import file.heapfile.HeapFile;
-import file.IRecord;
-import file.overflowfile.OverflowFile;
+import whoApp.data.IRecord;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -46,6 +45,10 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
     public int insert(T record) {
         //System.out.println("Before insert: " + simplePrint());
         int index = getHashIndex(record.hashCode());
+        if (index == 21 || index == 6) {
+            System.out.println("Before insert: " + record + " , index: " + index);
+            printChain(index);
+        }
         //System.out.println("Index: " + index);
         insert(index, record);
 
@@ -53,6 +56,18 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
             split();
         }
         //System.out.println("After insert: " + simplePrint());
+        if (index == 21 || index == 6) {
+            System.out.println("After insert: " + record + " , index: " + index);
+            printChain(index);
+
+            if (index == 6) {
+                System.out.println("Index 6:");
+                printChain(6);
+            } else
+                System.out.println("Index 21:");
+                printChain(21);
+            System.out.println("\n---------------------------------------");
+        }
         return index;
     }
 
@@ -66,39 +81,61 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
 
     public boolean delete(T record) {
         int index = getHashIndex(record.hashCode());
+        if (index == 21 || index == 6) {
+            System.out.println("Before delete: " + record + " , index: " + index);
+            printChain(index);
+        }
         HashBlock<T> block = loadBlock(index);
-        boolean removed = false;
 
-        if (block.removeRecord(record)) {
-            block.decrementRecordCount();
-            this.recordCount--;
-            removed = true;
-        } else if (block.hasNextBlock()) {
+        boolean removed = block.deleteRecord(record);
+
+        if (!removed && block.hasNextBlock()) {
             removed = overflowFile.delete(block.getNextBlock(), record);
-            if (removed) {
-                block.decrementRecordCount();
-                this.recordCount--;
-            }
         }
 
-        saveBlockToFile(index, block);
-        shakeChain(index);
+        if (removed) {
+            block.decrementRecordCount();
+            this.recordCount--;
 
-        while (calculateDensity() < MIN_DENSITY && blockCount > INITIAL_BLOCK_COUNT) {
-            merge();
+            saveBlockToFile(index, block);
+            shakeChain(index);
+
+//            while (calculateDensity() < MIN_DENSITY && blockCount > INITIAL_BLOCK_COUNT) {
+//                merge();
+//            }
+        }
+
+        if (index == 21 || index == 6) {
+            System.out.println("After delete: " + record + " , index: " + index);
+            printChain(index);
+            if (index == 6) {
+                System.out.println("Index 6:");
+                printChain(6);
+            } else
+                System.out.println("Index 21:");
+            printChain(21);
+            System.out.println("\n---------------------------------------");
         }
 
         return removed;
     }
 
-    public T get(T record) {
-        int index = getHashIndex(record.hashCode());
-
-        if (index < 0 || index >= blockCount) {
-            System.out.println(" ------------------------------------------------------- Index out of bounds 1! - i: " + index + ", " + simplePrint());
+    public void printChain(int blockIndex) {
+        if (blockIndex < blockCount) {
+            HashBlock<T> block = loadBlock(blockIndex);
+            System.out.println("Block #" + blockIndex);
+            System.out.println(block.toString());
+            if (block.hasNextBlock()) {
+                overflowFile.printChain(block.getNextBlock());
+            }
         }
 
+    }
+
+    public T get(T record) {
+        int index = getHashIndex(record.hashCode());
         HashBlock<T> block = loadBlock(index);
+
         T found = block.getRecord(record);
         if (found == null && block.hasNextBlock()) {
             found = overflowFile.get(block.getNextBlock(), record);
@@ -110,8 +147,8 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
     public boolean edit(T editedRecord) {
         int index = getHashIndex(editedRecord.hashCode());
         HashBlock<T> block = loadBlock(index);
-        boolean edited = block.editRecord(editedRecord);
 
+        boolean edited = block.editRecord(editedRecord);
         if (edited) {
             saveBlockToFile(index, block);
         } else {
@@ -147,65 +184,246 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
     }
 
     private int hash(int code, int power) {
-        return code % ((int) Math.pow(2, power) * INITIAL_BLOCK_COUNT);
+        int hash = Math.abs(code % ((int) Math.pow(2, power) * INITIAL_BLOCK_COUNT));
+        if ((hash == 21 || hash == 6) && (code == 166 || code == 198 || code == 213 ||  code == 230)) {
+            System.out.print("");
+        }
+        return hash;
     }
 
     private void split() {
         //System.out.println("Before split: " + simplePrint());
-        int oldSplitPointer = splitPointer;
-        int oldHashEdge = getHashEdge();
 
+        // Staré hodnoty pred splitom
+        int oldSplitPointer = splitPointer;
+        int oldHashEdge = getHashEdge();     // N = INITIAL_BLOCK_COUNT * 2^hashPower
+        int oldHashPower = hashPower;        // i
+
+        // Index nového bucketu = N + oldSplitPointer
         int newBlockIndex = blockCount;
         HashBlock<T> newBlock = createNewBlock();
         blockCount++;
 
+        // Načítaj bucket, ktorý sa bude splitovať
         HashBlock<T> oldBlock = loadBlock(oldSplitPointer);
         if (oldBlock == null) {
-            saveBlockToFile(newBlockIndex, newBlock);
             return;
         }
 
-        ArrayList<T> allRecords = clearLinkedBlocks(oldBlock);
-        saveBlockToFile(oldSplitPointer, oldBlock);
+        // Zober všetky záznamy zo starého bucketu + jeho overflow reťazca
+        ArrayList<LinkedBlock<T>> allOverflowBlocks = overflowFile.getBlockChain(oldBlock.getNextBlock());
+        ArrayList<T> allRecords = new ArrayList<>();
+        allRecords.addAll(oldBlock.removeRecords());
+        for (LinkedBlock<T> ob : allOverflowBlocks) {
+            allRecords.addAll(ob.removeRecords());
+        }
 
+        // Posuň splitPointer / hashPower na nové hodnoty
         splitPointer++;
         if (splitPointer >= oldHashEdge) {
             hashPower++;
             splitPointer = 0;
         }
 
+        // Rozdeľ záznamy medzi starý a nový bucket podľa h_{i+1}
+        ArrayList<T> oldBlockRecords = new ArrayList<>();
+        ArrayList<T> newBlockRecords = new ArrayList<>();
+
         for (T record : allRecords) {
-            int index = getHashIndex(record.hashCode());
+            int code = record.hashCode();
 
-            HashBlock<T> targetBlock;
-            int targetIndex;
+            int hNext = hash(code, oldHashPower + 1);
 
-            if (index == oldSplitPointer) {
-                targetBlock = oldBlock;
-                targetIndex = oldSplitPointer;
-            } else if (index == newBlockIndex) {
-                targetBlock = newBlock;
-                targetIndex = newBlockIndex;
+            if (hNext == oldSplitPointer) {
+                // to old
+                oldBlockRecords.add(record);
+            } else if (hNext == newBlockIndex) {
+                // to new
+                newBlockRecords.add(record);
             } else {
-                targetBlock = loadBlock(index);
-                if (targetBlock == null) {
-                    targetBlock = createNewBlock();
-                }
-                targetIndex = index;
-            }
-
-            insertIntoMainBlockOrOverflow(targetBlock, record);
-
-            if (targetIndex != oldSplitPointer && targetIndex != newBlockIndex) {
-                saveBlockToFile(targetIndex, targetBlock);
+                System.err.println("Error: incorrect linear hashing!!!");
+                oldBlockRecords.add(record);
             }
         }
 
+        // Znova vyplň starý bucket + jeho overflow reťazec
+        int lastUsedOld = insertRecordsToChain(oldBlockRecords, oldBlock, allOverflowBlocks);
+
+
+        ArrayList<LinkedBlock<T>> newOverflowBlocks = new ArrayList<>(); //unused blocks in old chain
+        int firstNewOverflowBlockIndex = -1;
+
+        if (lastUsedOld == -1) {
+            firstNewOverflowBlockIndex = oldBlock.getNextBlock();
+            oldBlock.setNextBlock(-1);
+            newOverflowBlocks = allOverflowBlocks;
+        } else {
+            ArrayList<LinkedBlock<T>> oldUsedOverflowBlocks = new ArrayList<>();
+
+            //divide blocks
+            for (int i = 0; i < allOverflowBlocks.size(); i++) {
+                if (i <= lastUsedOld) {
+                    oldUsedOverflowBlocks.add(allOverflowBlocks.get(i));
+                } else {
+                    newOverflowBlocks.add(allOverflowBlocks.get(i));
+                }
+            }
+            firstNewOverflowBlockIndex = oldUsedOverflowBlocks.getLast().getNextBlock();
+            oldUsedOverflowBlocks.getLast().setNextBlock(-1);
+
+
+            overflowFile.editBlockChain(oldBlock.getNextBlock(), oldUsedOverflowBlocks);
+        }
         saveBlockToFile(oldSplitPointer, oldBlock);
+
+
+        // Vyplň nový bucket + jeho overflow bloky
+        int lastUsedNew = insertRecordsToChain(newBlockRecords, newBlock, newOverflowBlocks);
+
+        ArrayList<LinkedBlock<T>> emptyOverflowBlocks = new ArrayList<>(); //unused blocks in new chain
+        int firstEmptyOverflowBlockIndex = -1;
+
+        if (lastUsedNew == -1) {
+            firstEmptyOverflowBlockIndex = firstNewOverflowBlockIndex;
+            newBlock.setNextBlock(-1);
+            emptyOverflowBlocks = newOverflowBlocks;
+        } else {
+            newBlock.setNextBlock(firstNewOverflowBlockIndex);
+            ArrayList<LinkedBlock<T>> newUsedOverflowBlocks = new ArrayList<>();
+
+            //divide blocks
+            for (int i = 0; i < newOverflowBlocks.size(); i++) {
+                if (i <= lastUsedNew) {
+                    newUsedOverflowBlocks.add(newOverflowBlocks.get(i));
+                } else {
+                    emptyOverflowBlocks.add(newOverflowBlocks.get(i));
+                }
+            }
+            firstEmptyOverflowBlockIndex = newUsedOverflowBlocks.getLast().getNextBlock();
+            newUsedOverflowBlocks.getLast().setNextBlock(-1);
+
+
+            overflowFile.editBlockChain(newBlock.getNextBlock(), newUsedOverflowBlocks);
+        }
         saveBlockToFile(newBlockIndex, newBlock);
+
+        //clear empty blocks
+        ArrayList<Integer> emptyBlocksIndexes = new ArrayList<>();
+        emptyBlocksIndexes.add(firstEmptyOverflowBlockIndex);
+        for (int i = 0; i < emptyOverflowBlocks.size() - 1; i++) {
+            emptyBlocksIndexes.add(emptyOverflowBlocks.get(i).getNextBlock());
+        }
+        overflowFile.addToEmptyBlocks(emptyBlocksIndexes);
+
+        // Upratanie prázdnych blokov na konci overflow súboru
         overflowFile.truncateEmptyBlocksAtEnd();
+
         //System.out.println("After split: " + simplePrint());
     }
+
+    private void shakeChain(int index) {
+        HashBlock<T> block = loadBlock(index);
+
+        boolean canShake = false;
+        int recordsToOverflow = block.getRecordCount() - block.getCapacity();
+        if (recordsToOverflow > 0) {
+            int minBlocks = (int) Math.ceil((double) recordsToOverflow / overflowFile.getRecordsPerBlock());
+            canShake = minBlocks < block.getOverflowBlockCount();
+        } else {
+            if (block.getOverflowBlockCount() > 0) {
+                canShake = true;
+            }
+        }
+
+        if (canShake) {
+            //shake
+
+            // Zober všetky záznamy zo starého bucketu + jeho overflow reťazca
+            ArrayList<LinkedBlock<T>> allOverflowBlocks = overflowFile.getBlockChain(block.getNextBlock());
+            ArrayList<T> allRecords = new ArrayList<>();
+            allRecords.addAll(block.removeRecords());
+            for (LinkedBlock<T> ob : allOverflowBlocks) {
+                allRecords.addAll(ob.removeRecords());
+            }
+
+            int lastUsed = insertRecordsToChain(allRecords, block, allOverflowBlocks);
+
+
+            ArrayList<LinkedBlock<T>> emptyOverflowBlocks = new ArrayList<>(); //unused blocks in old chain
+            int firstEmptyOverflowBlockIndex = -1;
+
+            if (lastUsed == -1) {
+                firstEmptyOverflowBlockIndex = block.getNextBlock();
+                block.setNextBlock(-1);
+                emptyOverflowBlocks = allOverflowBlocks;
+            } else {
+                ArrayList<LinkedBlock<T>> usedOverflowBlocks = new ArrayList<>();
+
+                //divide blocks
+                for (int i = 0; i < allOverflowBlocks.size(); i++) {
+                    if (i <= lastUsed) {
+                        usedOverflowBlocks.add(allOverflowBlocks.get(i));
+                    } else {
+                        emptyOverflowBlocks.add(allOverflowBlocks.get(i));
+                    }
+                }
+                firstEmptyOverflowBlockIndex = usedOverflowBlocks.getLast().getNextBlock();
+                usedOverflowBlocks.getLast().setNextBlock(-1);
+
+
+                overflowFile.editBlockChain(block.getNextBlock(), usedOverflowBlocks);
+            }
+
+            saveBlockToFile(index, block);
+
+            //clear empty blocks
+            ArrayList<Integer> emptyBlocksIndexes = new ArrayList<>();
+            emptyBlocksIndexes.add(firstEmptyOverflowBlockIndex);
+            for (int i = 0; i < emptyOverflowBlocks.size() - 1; i++) {
+                emptyBlocksIndexes.add(emptyOverflowBlocks.get(i).getNextBlock());
+            }
+            overflowFile.addToEmptyBlocks(emptyBlocksIndexes);
+
+            overflowFile.truncateEmptyBlocksAtEnd();
+        }
+    }
+
+    private int insertRecordsToChain(ArrayList<T> records, HashBlock<T> block, ArrayList<LinkedBlock<T>> overflowBlocks) {
+        int r = 0;
+
+        // main block
+        while (r < records.size() && block.isPartiallyEmpty()) {
+            block.addRecord(records.get(r++));
+        }
+
+        int lastUsed = -1;
+        int i = 0;
+
+        // overflow blocks
+        while (r < records.size() && i < overflowBlocks.size()) {
+            LinkedBlock<T> ob = overflowBlocks.get(i);
+
+            while (r < records.size() && ob.isPartiallyEmpty()) {
+                ob.addRecord(records.get(r++));
+            }
+
+            if (!ob.isEmpty()) {
+                lastUsed = i;
+            }
+
+            i++;
+        }
+
+        if (r < records.size()) {
+            throw new IllegalStateException("Not enough overflow blocks capacity during split");
+        }
+
+        block.setRecordCount(records.size());
+        block.setOverflowBlockCount(lastUsed + 1); // 0, ak lastUsed == -1
+
+        return lastUsed; // -1 => žiadne overflow bloky
+    }
+
 
     private boolean merge() {
         if (blockCount > INITIAL_BLOCK_COUNT) {
@@ -259,34 +477,12 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
                 }
             } else {
                 int overflowBlockIndex = overflowFile.insertToStart(record);
+
                 block.setNextBlock(overflowBlockIndex);
                 block.incrementOverflowBlockCount();
             }
             this.recordCount++;
             block.incrementRecordCount();
-        }
-    }
-
-
-    private void shakeChain(int startBlockIndex) {
-        HashBlock<T> block = loadBlock(startBlockIndex);
-
-        boolean canShake = false;
-        int recordsToOverflow = block.getRecordCount() - block.getCapacity();
-        if (recordsToOverflow > 0) {
-            canShake = (recordsToOverflow / overflowFile.getRecordsPerBlock()) < block.getOverflowBlockCount();
-        }
-
-        if (canShake) {
-            ArrayList<T> allRecords = clearLinkedBlocks(block);
-
-            //pridaj všetky zaznamy znova
-            for (T record : allRecords) {
-                insertIntoMainBlockOrOverflow(block, record);
-            }
-
-            saveBlockToFile(startBlockIndex, block);
-            overflowFile.truncateEmptyBlocksAtEnd();
         }
     }
 
@@ -447,4 +643,10 @@ public class HashFile<T extends IRecord<T>> extends HeapFile<T> {
     public String simplePrint() {
         return String.format("blockCount=%d, splitPointer=%d, hashpower=%d, hashEdge=%d, density=%.2f", blockCount, splitPointer, hashPower, getHashEdge(), calculateDensity());
     }
+
+    @Override
+    public void truncateEmptyBlocksAtEnd() {
+        //for safety
+    }
+
 }

@@ -1,7 +1,6 @@
 package file.hashfile;
 
-import file.IRecord;
-import file.overflowfile.LinkedBlock;
+import whoApp.data.IRecord;
 
 import java.io.*;
 import java.util.ArrayList;

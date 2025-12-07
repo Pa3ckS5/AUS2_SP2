@@ -1,6 +1,6 @@
-package file.overflowfile;
+package file.hashfile;
 
-import file.IRecord;
+import whoApp.data.IRecord;
 import file.heapfile.HeapFile;
 
 import java.io.FileNotFoundException;
@@ -18,16 +18,16 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         if (!emptyBlocks.isEmpty()) {
 
             int firstEmptyBlockIndex = emptyBlocks.findMin();
-            LinkedBlock<T> emptyBlock = loadBlock(firstEmptyBlockIndex);
+            LinkedBlock<T> emptyBlock = createNewBlock();
 
             if (emptyBlock != null && emptyBlock.addRecord(record)) {
                 saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
 
                 emptyBlocks.remove(firstEmptyBlockIndex);
 
-                if (emptyBlock.isPartiallyEmpty()) {
-                    partiallyEmptyBlocks.insert(firstEmptyBlockIndex);
-                }
+//                if (emptyBlock.isPartiallyEmpty()) {
+//                    partiallyEmptyBlocks.insert(firstEmptyBlockIndex);
+//                }
 
                 return firstEmptyBlockIndex;
             }
@@ -42,9 +42,9 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
             blockCount++;
 
             // Aktualizujeme zoznamy
-            if (!newBlock.isFull()) {
-                partiallyEmptyBlocks.insert(newBlockIndex);
-            }
+//            if (!newBlock.isFull()) {
+//                partiallyEmptyBlocks.insert(newBlockIndex);
+//            }
 
             return newBlockIndex;
         }
@@ -66,7 +66,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
 
                 if (block.addRecord(record)) {
                     saveBlockToFile(currentBlockIndex, block);
-                    updateBlockLists(currentBlockIndex, block);
+                    emptyBlocks.remove(Integer.valueOf(currentBlockIndex));
 
                     return false;
                 }
@@ -81,6 +81,28 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
 
             System.out.println("Error in insertToChain - index out of bounds");
             return false;
+        }
+    }
+
+    public void addToEmptyBlocks(ArrayList<Integer> emptyBlocksIndexes) {
+        for (Integer index : emptyBlocksIndexes) {
+            if (index >= 0 && index < blockCount) {
+                saveBlockToFile(index, createNewBlock());
+                emptyBlocks.insert(index);
+            }
+        }
+    }
+
+    public void editBlockChain(int startBlockIndex, ArrayList<LinkedBlock<T>> linkedBlocks) {
+        if (startBlockIndex < 0 || startBlockIndex >= blockCount) {
+            return;
+        }
+
+        int currentBlockIndex = startBlockIndex;
+
+        for (LinkedBlock<T> block : linkedBlocks) {
+            saveBlockToFile(currentBlockIndex, block);
+            currentBlockIndex = block.getNextBlock();
         }
     }
 
@@ -108,7 +130,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
     @Override
     public boolean delete(int startBlockIndex, T record) {
         int currentBlockIndex = startBlockIndex;
-        boolean recordDeleted = false;
+        boolean removed = false;
 
         while (currentBlockIndex != -1) {
             LinkedBlock<T> block = loadBlock(currentBlockIndex);
@@ -116,20 +138,19 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
                 break;
             }
 
-            boolean wasFull = block.isFull();
-
-            if (block.removeRecord(record)) {
-                recordDeleted = true;
+            if (block.deleteRecord(record)) {
+                removed = true;
                 saveBlockToFile(currentBlockIndex, block);
 
-                updateBlockListsAfterDelete(currentBlockIndex, block, wasFull);
+//                if (block.isEmpty()) {
+//                    emptyBlocks.insert(currentBlockIndex);
+//                }
             }
 
             currentBlockIndex = block.getNextBlock();
         }
 
-        //no truncate
-        return recordDeleted;
+        return removed;
     }
 
     public boolean edit(int startBlockIndex, T editedRecord) {
@@ -173,13 +194,34 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
 
             saveBlockToFile(currentBlockIndex, currentBlock);
             emptyBlocks.insert(currentBlockIndex);
-            partiallyEmptyBlocks.remove(Integer.valueOf(currentBlockIndex));
 
             currentBlockIndex = nextBlockIndex;
         }
 
         //no truncate
         return linkedRecords;
+    }
+
+    public ArrayList<LinkedBlock<T>> getBlockChain(int startBlockIndex) {
+        ArrayList<LinkedBlock<T>> linkedBlocks = new ArrayList<>();
+
+        if (startBlockIndex < 0 || startBlockIndex >= blockCount) {
+            return linkedBlocks;
+        }
+
+        int currentBlockIndex = startBlockIndex;
+
+        while (currentBlockIndex != -1) {
+            LinkedBlock<T> currentBlock = loadBlock(currentBlockIndex);
+            if (currentBlock == null) {
+                break;
+            }
+
+            linkedBlocks.add(currentBlock);
+            currentBlockIndex = currentBlock.getNextBlock();;
+        }
+
+        return linkedBlocks;
     }
 
     public int getCapacity() {
@@ -196,7 +238,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         if (!emptyBlocks.isEmpty()) {
             int firstEmptyBlockIndex = emptyBlocks.findMin();
 
-            LinkedBlock<T> emptyBlock = loadBlock(firstEmptyBlockIndex);
+            LinkedBlock<T> emptyBlock = createNewBlock();
 
             if (emptyBlock != null && emptyBlock.addRecord(record)) {
 
@@ -213,10 +255,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
                 saveBlockToFile(firstEmptyBlockIndex, emptyBlock);
                 emptyBlocks.remove(firstEmptyBlockIndex);
 
-                if (emptyBlock.isPartiallyEmpty()) {
-                    partiallyEmptyBlocks.insert(firstEmptyBlockIndex);
-                }
-
                 return firstEmptyBlockIndex;
             }
         }
@@ -227,10 +265,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         if (newBlock.addRecord(record)) {
             saveBlockToFile(newBlockIndex, newBlock);
             blockCount++;
-
-            if (!newBlock.isFull()) {
-                partiallyEmptyBlocks.insert(newBlockIndex);
-            }
 
             if (lastBlockIndex != -1) {
                 LinkedBlock<T> lastBlock = loadBlock(lastBlockIndex);
@@ -261,15 +295,6 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         }
     }
 
-    private void updateBlockListsAfterDelete(int blockIndex, LinkedBlock<T> block, boolean wasFull) {
-        if (block.isEmpty()) {
-            partiallyEmptyBlocks.remove(Integer.valueOf(blockIndex));
-            emptyBlocks.insert(blockIndex);
-        } else if (wasFull && block.isPartiallyEmpty()) {
-            partiallyEmptyBlocks.insert(blockIndex);
-        }
-    }
-
     @Override
     public void printAllBlocks() {
         System.out.println("=== OVERFLOW FILE ===");
@@ -277,7 +302,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         System.out.println("Block size: " + blockSize);
         System.out.println("Records per block: " + recordsPerBlock);
         System.out.println("Empty blocks: " + emptyBlocks);
-        System.out.println("Partially empty blocks: " + partiallyEmptyBlocks);
+        //System.out.println("Partially empty blocks: " + partiallyEmptyBlocks);
         System.out.println("Total blocks in file: " + getBlockCount());
         System.out.println();
 
@@ -302,7 +327,7 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         sb.append("Block size: ").append(blockSize).append("\n");
         sb.append("Records per block: ").append(recordsPerBlock).append("\n");
         sb.append("Empty blocks: ").append(emptyBlocks).append("\n");
-        sb.append("Partially empty blocks: ").append(partiallyEmptyBlocks).append("\n");
+        //sb.append("Partially empty blocks: ").append(partiallyEmptyBlocks).append("\n");
         sb.append("Total blocks in file: ").append(getBlockCount()).append("\n\n");
 
         for (int i = 0; i < getBlockCount(); i++) {
@@ -316,5 +341,24 @@ public class OverflowFile<T extends IRecord<T>> extends HeapFile<T> {
         sb.append("=== END OF OVERFLOW FILE ===");
 
         return sb.toString();
+    }
+
+    public void printChain(int blockIndex) {
+
+        int i = blockIndex;
+        int s = 0;
+        while (i != -1 && s < 4) {
+            LinkedBlock<T> block = loadBlock(i);
+            if (block == null) {
+                break;
+            }
+            System.out.println("Ov Block #" + i + ":");
+            System.out.println(block.toString());
+            i = block.getNextBlock();
+            s++;
+        }
+
+        System.out.println("Empty blocks: " + emptyBlocks);
+
     }
 }

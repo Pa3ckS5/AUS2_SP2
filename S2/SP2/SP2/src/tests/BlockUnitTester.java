@@ -1,6 +1,6 @@
 package tests;
 
-import whoApp.Patient;
+import whoApp.data.Patient;
 import file.heapfile.Block;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,23 +66,23 @@ public class BlockUnitTester {
         block.addRecord(patient3);
 
         // Test odstránenie existujúceho záznamu
-        assertTrue(block.removeRecord(patient2));
+        assertTrue(block.deleteRecord(patient2));
         assertEquals(2, block.getValidCount());
         assertTrue(block.isPartiallyEmpty());
 
         // Test odstránenie neexistujúceho záznamu
         Patient nonExistentPatient = new Patient("Non", "Existent", java.time.LocalDate.of(2000, 1, 1), "P999");
-        assertFalse(block.removeRecord(nonExistentPatient));
+        assertFalse(block.deleteRecord(nonExistentPatient));
         assertEquals(2, block.getValidCount());
 
         // Test odstránenie záznamu s rovnakým ID ale rôznymi ostatnými údajmi
         Patient sameIdPatient = new Patient("Different", "Name", java.time.LocalDate.of(1999, 9, 9), "P001");
-        assertTrue(block.removeRecord(sameIdPatient));
+        assertTrue(block.deleteRecord(sameIdPatient));
         assertEquals(1, block.getValidCount());
 
         // Test odstránenie z prázdneho bloku
         Block<Patient> emptyBlock = new Block<>(2, Patient.class);
-        assertFalse(emptyBlock.removeRecord(patient1));
+        assertFalse(emptyBlock.deleteRecord(patient1));
     }
 
     @Test
@@ -122,7 +122,7 @@ public class BlockUnitTester {
         assertNull(block.getRecord(nonExistent));
 
         // Test získanie záznamu po odstránení
-        block.removeRecord(patient1);
+        block.deleteRecord(patient1);
         assertNull(block.getRecord(patient1));
     }
 
@@ -236,7 +236,7 @@ public class BlockUnitTester {
         assertTrue(block.isFull());
 
         // Test po odstránení záznamu
-        block.removeRecord(patient1);
+        block.deleteRecord(patient1);
         assertFalse(block.isEmpty());
         assertTrue(block.isPartiallyEmpty());
         assertFalse(block.isFull());

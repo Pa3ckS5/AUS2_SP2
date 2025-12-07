@@ -1,5 +1,8 @@
 package whoApp;
 
+import whoApp.data.Patient;
+import whoApp.data.PcrTest;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;

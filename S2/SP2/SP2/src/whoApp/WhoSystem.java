@@ -1,6 +1,8 @@
 package whoApp;
 
 import file.hashfile.HashFile;
+import whoApp.data.Patient;
+import whoApp.data.PcrTest;
 
 import java.io.*;
 import java.time.LocalDate;
